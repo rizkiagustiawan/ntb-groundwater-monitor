@@ -1,0 +1,606 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>NTB Groundwater Monitor</title>
+<link href="https://unpkg.com/maplibre-gl@4.1.2/dist/maplibre-gl.css" rel="stylesheet">
+<script src="https://unpkg.com/maplibre-gl@4.1.2/dist/maplibre-gl.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body { font-family: system-ui, -apple-system, sans-serif; background:#0f1117; color:#e2e8f0; height:100vh; display:flex; flex-direction:column; overflow:hidden; }
+
+  /* HEADER */
+  header { background:#0f1117; border-bottom:1px solid #1e2433; padding:0 20px; height:52px; display:flex; align-items:center; justify-content:space-between; flex-shrink:0; z-index:10; }
+  .logo { display:flex; align-items:center; gap:10px; }
+  .logo-dot { width:10px; height:10px; border-radius:50%; background:#1D9E75; box-shadow:0 0 8px #1D9E75; }
+  .logo-text { font-size:15px; font-weight:600; letter-spacing:-.01em; }
+  .logo-sub { font-size:11px; color:#64748b; margin-top:1px; }
+  .header-badges { display:flex; gap:8px; }
+  .hbadge { font-size:10px; padding:3px 8px; border-radius:4px; border:1px solid #1e2433; color:#94a3b8; }
+
+  /* LAYOUT */
+  .main { display:flex; flex:1; overflow:hidden; }
+
+  /* SIDEBAR */
+  .sidebar { width:300px; flex-shrink:0; background:#0f1117; border-right:1px solid #1e2433; display:flex; flex-direction:column; overflow:hidden; }
+  .sidebar-section { padding:14px 16px; border-bottom:1px solid #1e2433; }
+  .sidebar-label { font-size:10px; text-transform:uppercase; letter-spacing:.08em; color:#475569; font-weight:600; margin-bottom:10px; }
+
+  /* STAT CARDS */
+  .stat-grid { display:grid; grid-template-columns:1fr 1fr; gap:6px; }
+  .stat-card { background:#1a1f2e; border-radius:8px; padding:10px 12px; }
+  .stat-val { font-size:22px; font-weight:700; line-height:1; }
+  .stat-lbl { font-size:10px; color:#64748b; margin-top:3px; }
+  .c-green { color:#1D9E75; }
+  .c-amber { color:#BA7517; }
+  .c-red   { color:#E24B4A; }
+  .c-muted { color:#94a3b8; }
+
+  /* FILTERS */
+  select, input[type=range] { width:100%; background:#1a1f2e; border:1px solid #1e2433; color:#e2e8f0; border-radius:6px; padding:7px 10px; font-size:12px; outline:none; }
+  select:focus { border-color:#1D9E75; }
+
+  /* LEGEND */
+  .legend-item { display:flex; align-items:center; gap:8px; margin-bottom:6px; font-size:12px; color:#94a3b8; }
+  .legend-dot { width:10px; height:10px; border-radius:50%; flex-shrink:0; }
+
+  /* SIDEBAR SCROLL */
+  .sidebar-scroll { flex:1; overflow-y:auto; }
+  .sidebar-scroll::-webkit-scrollbar { width:4px; }
+  .sidebar-scroll::-webkit-scrollbar-track { background:transparent; }
+  .sidebar-scroll::-webkit-scrollbar-thumb { background:#1e2433; border-radius:2px; }
+
+  /* WELL LIST */
+  .well-item { padding:10px 16px; border-bottom:1px solid #1a1f2e; cursor:pointer; transition:background .15s; }
+  .well-item:hover { background:#1a1f2e; }
+  .well-item.selected { background:#0f2a1e; border-left:3px solid #1D9E75; }
+  .well-name { font-size:12px; font-weight:500; color:#e2e8f0; }
+  .well-meta { font-size:10px; color:#475569; margin-top:2px; }
+  .well-status { font-size:10px; padding:1px 6px; border-radius:3px; float:right; }
+  .s-normal   { background:#0a2a1e; color:#1D9E75; }
+  .s-waspada  { background:#2a1e0a; color:#BA7517; }
+  .s-kritis   { background:#2a0a0a; color:#E24B4A; }
+  .s-sangat_kritis { background:#1a0505; color:#F7C1C1; }
+  .s-tidak_ada_data { background:#1a1f2e; color:#475569; }
+
+  /* MAP */
+  #map { flex:1; }
+
+  /* PANEL KANAN - DETAIL SUMUR */
+  .detail-panel { width:320px; flex-shrink:0; background:#0f1117; border-left:1px solid #1e2433; display:flex; flex-direction:column; overflow:hidden; transition:width .2s; }
+  .detail-panel.hidden { width:0; overflow:hidden; }
+  .detail-header { padding:14px 16px; border-bottom:1px solid #1e2433; display:flex; justify-content:space-between; align-items:flex-start; }
+  .detail-title { font-size:13px; font-weight:600; }
+  .detail-sub   { font-size:11px; color:#475569; margin-top:2px; }
+  .close-btn { background:none; border:none; color:#475569; cursor:pointer; font-size:16px; padding:0; line-height:1; }
+  .close-btn:hover { color:#e2e8f0; }
+  .detail-body { flex:1; overflow-y:auto; padding:14px 16px; }
+  .detail-body::-webkit-scrollbar { width:4px; }
+  .detail-body::-webkit-scrollbar-thumb { background:#1e2433; }
+
+  .metric-row { display:flex; justify-content:space-between; padding:7px 0; border-bottom:1px solid #1a1f2e; font-size:12px; }
+  .metric-key { color:#475569; }
+  .metric-val { color:#e2e8f0; font-weight:500; }
+
+  .status-badge { display:inline-block; padding:3px 10px; border-radius:4px; font-size:11px; font-weight:600; margin-top:8px; margin-bottom:12px; }
+
+  .chart-wrap { margin-top:14px; }
+  .chart-label { font-size:10px; text-transform:uppercase; letter-spacing:.06em; color:#475569; margin-bottom:8px; }
+  .chart-canvas-wrap { height:160px; }
+
+  .legal-note { font-size:10px; color:#334155; margin-top:14px; line-height:1.6; padding:8px 10px; background:#1a1f2e; border-radius:6px; }
+
+  /* LOADING */
+  .loading { position:absolute; inset:0; background:rgba(15,17,23,.8); display:flex; align-items:center; justify-content:center; z-index:100; flex-direction:column; gap:10px; }
+  .loading-dot { width:8px; height:8px; border-radius:50%; background:#1D9E75; animation:pulse 1.2s ease-in-out infinite; }
+  .loading-dot:nth-child(2) { animation-delay:.2s; }
+  .loading-dot:nth-child(3) { animation-delay:.4s; }
+  .loading-dots { display:flex; gap:6px; }
+  @keyframes pulse { 0%,100%{opacity:.3;transform:scale(.8)} 50%{opacity:1;transform:scale(1)} }
+  .loading-text { font-size:13px; color:#64748b; }
+
+  .api-url { font-size:10px; color:#334155; }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo">
+    <div class="logo-dot"></div>
+    <div>
+      <div class="logo-text">NTB Groundwater Monitor</div>
+      <div class="logo-sub">Platform Monitoring Air Tanah — Nusa Tenggara Barat</div>
+    </div>
+  </div>
+  <div class="header-badges">
+    <span class="hbadge">PP 43/2008</span>
+    <span class="hbadge">GRACE RL06</span>
+    <span class="hbadge">v1.0.0</span>
+  </div>
+</header>
+
+<div class="main">
+  <!-- SIDEBAR KIRI -->
+  <div class="sidebar">
+    <!-- Stat Cards -->
+    <div class="sidebar-section">
+      <div class="sidebar-label">Ringkasan NTB</div>
+      <div class="stat-grid">
+        <div class="stat-card">
+          <div class="stat-val c-muted" id="stat-total">–</div>
+          <div class="stat-lbl">Total sumur</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-val c-green" id="stat-normal">–</div>
+          <div class="stat-lbl">Normal</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-val c-amber" id="stat-waspada">–</div>
+          <div class="stat-lbl">Waspada</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-val c-red" id="stat-kritis">–</div>
+          <div class="stat-lbl">Kritis</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Filter -->
+    <div class="sidebar-section">
+      <div class="sidebar-label">Filter</div>
+      <select id="filter-kab" style="margin-bottom:6px" onchange="applyFilter()">
+        <option value="">Semua Kabupaten/Kota</option>
+        <option value="Kab. Sumbawa">Kab. Sumbawa</option>
+        <option value="Kab. Sumbawa Barat">Kab. Sumbawa Barat</option>
+        <option value="Kab. Dompu">Kab. Dompu</option>
+        <option value="Kab. Bima">Kab. Bima</option>
+        <option value="Kota Bima">Kota Bima</option>
+        <option value="Kab. Lombok Utara">Kab. Lombok Utara</option>
+      </select>
+      <select id="filter-status" onchange="applyFilter()">
+        <option value="">Semua Status</option>
+        <option value="normal">Normal</option>
+        <option value="waspada">Waspada</option>
+        <option value="kritis">Kritis</option>
+        <option value="sangat_kritis">Sangat Kritis</option>
+      </select>
+    </div>
+
+    <!-- Legend -->
+    <div class="sidebar-section">
+      <div class="sidebar-label">Status muka air tanah</div>
+      <div class="legend-item"><div class="legend-dot" style="background:#1D9E75"></div>Normal (< 30% kedalaman sumur)</div>
+      <div class="legend-item"><div class="legend-dot" style="background:#BA7517"></div>Waspada (30–60%)</div>
+      <div class="legend-item"><div class="legend-dot" style="background:#E24B4A"></div>Kritis (60–80%)</div>
+      <div class="legend-item"><div class="legend-dot" style="background:#791F1F"></div>Sangat kritis (> 80%)</div>
+      <div class="legend-item"><div class="legend-dot" style="background:#475569"></div>Tidak ada data</div>
+    </div>
+
+    <!-- Daftar sumur -->
+    <div class="sidebar-label" style="padding:10px 16px 4px; flex-shrink:0">Daftar Sumur Pantau</div>
+    <div class="sidebar-scroll" id="well-list"></div>
+  </div>
+
+  <!-- PETA -->
+  <div id="map">
+    <div class="loading" id="loading">
+      <div class="loading-dots">
+        <div class="loading-dot"></div>
+        <div class="loading-dot"></div>
+        <div class="loading-dot"></div>
+      </div>
+      <div class="loading-text">Memuat data sumur pantau NTB...</div>
+    </div>
+  </div>
+
+  <!-- PANEL DETAIL -->
+  <div class="detail-panel hidden" id="detail-panel">
+    <div class="detail-header">
+      <div>
+        <div class="detail-title" id="det-name">–</div>
+        <div class="detail-sub" id="det-loc">–</div>
+      </div>
+      <button class="close-btn" onclick="closeDetail()">✕</button>
+    </div>
+    <div class="detail-body">
+      <div id="det-status-badge"></div>
+      <div id="det-metrics"></div>
+      <div class="chart-wrap">
+        <div class="chart-label">Muka air tanah 12 bulan terakhir (m)</div>
+        <div class="chart-canvas-wrap"><canvas id="det-chart"></canvas></div>
+      </div>
+      <div class="legal-note" id="det-legal"></div>
+    </div>
+  </div>
+</div>
+
+<script>
+const API = '/api';
+let map, allFeatures = [], chartInstance = null, selectedId = null;
+
+// ── INISIALISASI PETA ──────────────────────────────────────
+map = new maplibregl.Map({
+  container: 'map',
+  style: {
+    version: 8,
+    sources: {
+      'osm': {
+        type: 'raster',
+        tiles: ['https://tile.openstreetmap.org/{z}/{x}/{y}.png'],
+        tileSize: 256,
+        attribution: '© OpenStreetMap contributors'
+      }
+    },
+    layers: [{ id: 'osm', type: 'raster', source: 'osm', paint: { 'raster-opacity': 0.3 } }],
+    background: { type: 'background' }
+  },
+  center: [117.8, -8.6],   // Tengah Sumbawa
+  zoom: 8,
+  minZoom: 6,
+  maxZoom: 16
+});
+
+map.addControl(new maplibregl.NavigationControl(), 'top-right');
+map.addControl(new maplibregl.ScaleControl({ unit: 'metric' }), 'bottom-right');
+
+map.on('load', () => { loadWells(); });
+
+
+// ── LOAD DATA SUMUR ───────────────────────────────────────
+async function loadWells() {
+  try {
+    const resp = await fetch(`${API}/wells/geojson`);
+    if (!resp.ok) throw new Error('API tidak dapat dijangkau');
+    const data = await resp.json();
+    allFeatures = data.features;
+
+    addWellLayers(data);
+    updateStats(data.features);
+    renderWellList(data.features);
+    document.getElementById('loading').style.display = 'none';
+  } catch(e) {
+    document.getElementById('loading').innerHTML = `
+      <div style="text-align:center;max-width:260px">
+        <div style="color:#E24B4A;font-size:13px;margin-bottom:8px">Tidak dapat terhubung ke API</div>
+        <div style="color:#475569;font-size:12px;line-height:1.7">Pastikan Docker sudah berjalan:<br><code style="color:#94a3b8">docker compose up -d</code><br><br>Lalu akses: <code style="color:#94a3b8">http://localhost:8000</code></div>
+        <div style="margin-top:12px;font-size:11px;color:#334155">Mode demo: memuat data simulasi...</div>
+      </div>`;
+    loadDemoData();
+  }
+}
+
+
+// ── DEMO DATA (tanpa API) ─────────────────────────────────
+function loadDemoData() {
+  const demo = makeDemoGeoJSON();
+  allFeatures = demo.features;
+  setTimeout(() => {
+    addWellLayers(demo);
+    updateStats(demo.features);
+    renderWellList(demo.features);
+    document.getElementById('loading').style.display = 'none';
+  }, 800);
+}
+
+function makeDemoGeoJSON() {
+  const wells = [
+    { id:1, well_code:'SMB-001', name:'Sumur Pantau Sumbawa Kota', kecamatan:'Sumbawa', kabupaten:'Kab. Sumbawa', depth_m:45, aquifer_type:'bebas', water_level_m:13.5, water_level_pct:30, ph:7.1, conductivity_us:420, status_level:'normal', color:'#1D9E75', measured_at:'2025-03-01T00:00:00', lon:117.4174, lat:-8.4932 },
+    { id:2, well_code:'SMB-002', name:'Sumur Pantau Moyo Hilir', kecamatan:'Moyo Hilir', kabupaten:'Kab. Sumbawa', depth_m:38.5, aquifer_type:'bebas', water_level_m:19.3, water_level_pct:50, ph:6.8, conductivity_us:580, status_level:'waspada', color:'#BA7517', measured_at:'2025-03-01T00:00:00', lon:117.6012, lat:-8.5521 },
+    { id:3, well_code:'SMB-003', name:'Sumur Pantau Unter Iwes', kecamatan:'Unter Iwes', kabupaten:'Kab. Sumbawa', depth_m:52, aquifer_type:'tertekan', water_level_m:15.6, water_level_pct:30, ph:7.3, conductivity_us:310, status_level:'normal', color:'#1D9E75', measured_at:'2025-03-01T00:00:00', lon:117.3845, lat:-8.4234 },
+    { id:4, well_code:'KSB-002', name:'Sumur Pantau Sekongkang', kecamatan:'Sekongkang', kabupaten:'Kab. Sumbawa Barat', depth_m:65, aquifer_type:'tertekan', water_level_m:45.5, water_level_pct:70, ph:6.5, conductivity_us:890, status_level:'kritis', color:'#E24B4A', measured_at:'2025-03-01T00:00:00', lon:116.7012, lat:-8.9823 },
+    { id:5, well_code:'DMP-001', name:'Sumur Pantau Dompu Kota', kecamatan:'Dompu', kabupaten:'Kab. Dompu', depth_m:50, aquifer_type:'bebas', water_level_m:28.0, water_level_pct:56, ph:7.0, conductivity_us:510, status_level:'waspada', color:'#BA7517', measured_at:'2025-03-01T00:00:00', lon:118.4623, lat:-8.5312 },
+    { id:6, well_code:'BMA-001', name:'Sumur Pantau Raba', kecamatan:'Raba', kabupaten:'Kab. Bima', depth_m:55, aquifer_type:'tertekan', water_level_m:11.0, water_level_pct:20, ph:7.4, conductivity_us:380, status_level:'normal', color:'#1D9E75', measured_at:'2025-03-01T00:00:00', lon:118.7234, lat:-8.4823 },
+    { id:7, well_code:'BMA-004', name:'Sumur Pantau Sape', kecamatan:'Sape', kabupaten:'Kab. Bima', depth_m:52, aquifer_type:'tertekan', water_level_m:43.2, water_level_pct:83, ph:6.3, conductivity_us:1100, status_level:'sangat_kritis', color:'#791F1F', measured_at:'2025-03-01T00:00:00', lon:119.0123, lat:-8.5834 },
+    { id:8, well_code:'BIM-001', name:'Sumur Pantau Rasanae Barat', kecamatan:'Rasanae Barat', kabupaten:'Kota Bima', depth_m:45, aquifer_type:'bebas', water_level_m:22.0, water_level_pct:49, ph:6.9, conductivity_us:630, status_level:'waspada', color:'#BA7517', measured_at:'2025-03-01T00:00:00', lon:118.7134, lat:-8.4612 },
+    { id:9, well_code:'LUT-001', name:'Sumur Pantau Tanjung', kecamatan:'Tanjung', kabupaten:'Kab. Lombok Utara', depth_m:35, aquifer_type:'bebas', water_level_m:9.1, water_level_pct:26, ph:7.2, conductivity_us:290, status_level:'normal', color:'#1D9E75', measured_at:'2025-03-01T00:00:00', lon:116.1423, lat:-8.3512 },
+  ];
+
+  return {
+    type: 'FeatureCollection',
+    metadata: { title:'Demo Mode — NTB Groundwater', total_wells: wells.length },
+    features: wells.map(w => ({
+      type: 'Feature',
+      geometry: { type:'Point', coordinates:[w.lon, w.lat] },
+      properties: w
+    }))
+  };
+}
+
+
+// ── TAMBAH LAYER KE PETA ──────────────────────────────────
+function addWellLayers(geojson) {
+  if (map.getSource('wells')) {
+    map.getSource('wells').setData(geojson);
+    return;
+  }
+
+  map.addSource('wells', { type:'geojson', data: geojson });
+
+  // Lingkaran halo (glow)
+  map.addLayer({
+    id: 'wells-halo',
+    type: 'circle',
+    source: 'wells',
+    paint: {
+      'circle-radius': 14,
+      'circle-color': ['get','color'],
+      'circle-opacity': 0.15,
+      'circle-stroke-width': 0
+    }
+  });
+
+  // Titik utama
+  map.addLayer({
+    id: 'wells-circle',
+    type: 'circle',
+    source: 'wells',
+    paint: {
+      'circle-radius': ['interpolate',['linear'],['zoom'],7,5,12,9],
+      'circle-color': ['get','color'],
+      'circle-stroke-color': '#0f1117',
+      'circle-stroke-width': 1.5,
+      'circle-opacity': 0.95
+    }
+  });
+
+  // Klik sumur
+  map.on('click','wells-circle', e => {
+    const props = e.features[0].properties;
+    const coords = e.features[0].geometry.coordinates;
+    selectWell(props.id, coords);
+  });
+
+  map.on('mouseenter','wells-circle', () => { map.getCanvas().style.cursor = 'pointer'; });
+  map.on('mouseleave','wells-circle', () => { map.getCanvas().style.cursor = ''; });
+}
+
+
+// ── STATS HEADER ──────────────────────────────────────────
+function updateStats(features) {
+  const s = { normal:0, waspada:0, kritis:0, sangat_kritis:0 };
+  features.forEach(f => {
+    const sl = f.properties.status_level;
+    if (s[sl] !== undefined) s[sl]++;
+  });
+  document.getElementById('stat-total').textContent   = features.length;
+  document.getElementById('stat-normal').textContent  = s.normal;
+  document.getElementById('stat-waspada').textContent = s.waspada;
+  document.getElementById('stat-kritis').textContent  = s.kritis + s.sangat_kritis;
+}
+
+
+// ── DAFTAR SUMUR SIDEBAR ──────────────────────────────────
+function renderWellList(features) {
+  const el = document.getElementById('well-list');
+  if (!features.length) { el.innerHTML = '<div style="padding:16px;font-size:12px;color:#475569">Tidak ada sumur ditemukan</div>'; return; }
+  el.innerHTML = features.map(f => {
+    const p = f.properties;
+    const sc = `s-${p.status_level}`;
+    const slabel = { normal:'Normal', waspada:'Waspada', kritis:'Kritis', sangat_kritis:'Sangat Kritis', tidak_ada_data:'–' };
+    return `<div class="well-item${selectedId===p.id?' selected':''}" id="li-${p.id}" onclick="selectWell(${p.id}, ${JSON.stringify(f.geometry.coordinates)})">
+      <span class="well-status ${sc}">${slabel[p.status_level]||'–'}</span>
+      <div class="well-name">${p.name}</div>
+      <div class="well-meta">${p.kecamatan} · ${p.kabupaten}</div>
+    </div>`;
+  }).join('');
+}
+
+
+// ── FILTER ───────────────────────────────────────────────
+function applyFilter() {
+  const kab = document.getElementById('filter-kab').value.toLowerCase();
+  const st  = document.getElementById('filter-status').value;
+  const filtered = allFeatures.filter(f => {
+    const p = f.properties;
+    const okKab = !kab || p.kabupaten.toLowerCase().includes(kab);
+    const okSt  = !st  || p.status_level === st;
+    return okKab && okSt;
+  });
+
+  if (map.getSource('wells')) {
+    map.getSource('wells').setData({ type:'FeatureCollection', features: filtered });
+  }
+  renderWellList(filtered);
+  updateStats(filtered);
+}
+
+
+// ── SELECT SUMUR ──────────────────────────────────────────
+async function selectWell(id, coords) {
+  selectedId = id;
+  // highlight sidebar
+  document.querySelectorAll('.well-item').forEach(el => el.classList.remove('selected'));
+  const li = document.getElementById(`li-${id}`);
+  if (li) { li.classList.add('selected'); li.scrollIntoView({ block:'nearest' }); }
+
+  // fly ke sumur
+  map.flyTo({ center: coords, zoom: Math.max(map.getZoom(), 11), speed: 1.2 });
+
+  // buka panel
+  const panel = document.getElementById('detail-panel');
+  panel.classList.remove('hidden');
+
+  // isi dari cached data dulu
+  const feat = allFeatures.find(f => f.properties.id === id);
+  if (feat) fillDetailBasic(feat.properties);
+
+  // fetch time series
+  try {
+    const resp = await fetch(`${API}/wells/${id}/timeseries?months=12`);
+    if (resp.ok) {
+      const data = await resp.json();
+      fillDetailChart(data);
+    } else { fillDemoChart(feat?.properties); }
+  } catch { fillDemoChart(feat?.properties); }
+}
+
+function closeDetail() {
+  document.getElementById('detail-panel').classList.add('hidden');
+  selectedId = null;
+  document.querySelectorAll('.well-item').forEach(el => el.classList.remove('selected'));
+}
+
+function fillDetailBasic(p) {
+  document.getElementById('det-name').textContent = p.name;
+  document.getElementById('det-loc').textContent  = `${p.kecamatan} · ${p.kabupaten}`;
+
+  const slabel = { normal:'Normal', waspada:'Waspada', kritis:'Kritis', sangat_kritis:'Sangat Kritis', tidak_ada_data:'Tidak Ada Data' };
+  const scolor = { normal:'#1D9E75', waspada:'#BA7517', kritis:'#E24B4A', sangat_kritis:'#F7C1C1', tidak_ada_data:'#475569' };
+  const sbg    = { normal:'#0a2a1e', waspada:'#2a1e0a', kritis:'#2a0a0a', sangat_kritis:'#1a0505', tidak_ada_data:'#1a1f2e' };
+
+  document.getElementById('det-status-badge').innerHTML = `
+    <div class="status-badge" style="background:${sbg[p.status_level]};color:${scolor[p.status_level]};border:1px solid ${scolor[p.status_level]}33">
+      ${slabel[p.status_level] || '–'}
+    </div>`;
+
+  const fmt = v => v !== null && v !== undefined ? v : '–';
+  const fmtDate = d => d ? new Date(d).toLocaleDateString('id-ID',{year:'numeric',month:'long'}) : '–';
+
+  document.getElementById('det-metrics').innerHTML = `
+    <div class="metric-row"><span class="metric-key">Kode sumur</span><span class="metric-val">${fmt(p.well_code)}</span></div>
+    <div class="metric-row"><span class="metric-key">Jenis akuifer</span><span class="metric-val">${fmt(p.aquifer_type)}</span></div>
+    <div class="metric-row"><span class="metric-key">Kedalaman sumur</span><span class="metric-val">${p.depth_m ? p.depth_m+' m' : '–'}</span></div>
+    <div class="metric-row"><span class="metric-key">Muka air saat ini</span><span class="metric-val" style="color:${scolor[p.status_level]}">${p.water_level_m ? p.water_level_m+' m' : '–'} ${p.water_level_pct ? '('+p.water_level_pct+'%)' : ''}</span></div>
+    <div class="metric-row"><span class="metric-key">pH</span><span class="metric-val">${fmt(p.ph)}</span></div>
+    <div class="metric-row"><span class="metric-key">Konduktivitas</span><span class="metric-val">${p.conductivity_us ? p.conductivity_us+' µS/cm' : '–'}</span></div>
+    <div class="metric-row"><span class="metric-key">Diukur</span><span class="metric-val">${fmtDate(p.measured_at)}</span></div>`;
+
+  document.getElementById('det-legal').innerHTML = `
+    Monitoring sesuai <b>PP No. 43 Tahun 2008</b> tentang Air Tanah Pasal 15.<br>
+    Parameter: SNI 6989.58:2008. Nilai muka air = kedalaman dari permukaan tanah.<br>
+    Status kritis bila muka air mencapai > 60% kedalaman sumur.`;
+}
+
+function fillDetailChart(data) {
+  const labels = data.series.map(s => s.period);
+  const values = data.series.map(s => s.water_level_m);
+  renderChart(labels, values, data.well?.depth_m);
+}
+
+function fillDemoChart(props) {
+  if (!props) return;
+  // Generate demo time series
+  const now = new Date();
+  const labels = [], values = [];
+  for (let i = 11; i >= 0; i--) {
+    const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+    labels.push(`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`);
+    // Variasi musiman: lebih dalam (kering) di Jul-Okt
+    const month = d.getMonth();
+    const seasonal = 8 * Math.sin((month - 3) * 0.52);
+    values.push(+(((props.water_level_m || 15) + seasonal * 0.4 + (Math.random()-0.5) * 1.5)).toFixed(2));
+  }
+  renderChart(labels, values, props.depth_m);
+}
+
+function renderChart(labels, values, depthM) {
+  if (chartInstance) { chartInstance.destroy(); chartInstance = null; }
+  const ctx = document.getElementById('det-chart').getContext('2d');
+
+  // Batas kritis (60% kedalaman)
+  const critLine = depthM ? +(depthM * 0.6).toFixed(1) : null;
+
+  chartInstance = new Chart(ctx, {
+    type: 'line',
+    data: {
+      labels,
+      datasets: [
+        {
+          label: 'Muka air (m)',
+          data: values,
+          borderColor: '#1D9E75',
+          backgroundColor: 'rgba(29,158,117,0.08)',
+          fill: true,
+          tension: 0.4,
+          pointRadius: 3,
+          pointBackgroundColor: '#1D9E75',
+          borderWidth: 1.5
+        },
+        ...(critLine ? [{
+          label: `Batas waspada (${critLine} m)`,
+          data: Array(labels.length).fill(critLine),
+          borderColor: '#BA7517',
+          borderDash: [4,3],
+          borderWidth: 1,
+          pointRadius: 0,
+          fill: false
+        }] : [])
+      ]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          backgroundColor: '#1a1f2e',
+          titleColor: '#94a3b8',
+          bodyColor: '#e2e8f0',
+          borderColor: '#1e2433',
+          borderWidth: 1,
+          callbacks: {
+            label: ctx => `${ctx.dataset.label}: ${ctx.parsed.y} m`
+          }
+        }
+      },
+      scales: {
+        x: { ticks:{ color:'#475569', font:{size:10} }, grid:{ color:'#1e2433' } },
+        y: {
+          ticks:{ color:'#475569', font:{size:10}, callback: v => v+' m' },
+          grid:{ color:'#1e2433' },
+          reverse: true,
+          title:{ display:true, text:'Kedalaman (m)', color:'#334155', font:{size:10} }
+        }
+      }
+    }
+  });
+}
+</script>
+<div id="grace-bottom" style="position:absolute;bottom:0;left:300px;right:0;height:200px;background:#0f1117;border-top:1px solid #1e2433;padding:12px 16px;z-index:5;"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px"><span style="font-size:12px;font-weight:500;color:#e2e8f0">NASA GRACE — Anomali Air Tanah NTB 2020-2025</span><div style="font-size:10px;display:flex;gap:10px"><span style="color:#1D9E75">■ Surplus</span><span style="color:#BA7517">■ Normal</span><span style="color:#E24B4A">■ Defisit</span></div></div><div style="height:140px"><canvas id="grace-chart"></canvas></div></div></body>
+</html>
+<script>
+window.addEventListener('load', () => setTimeout(loadGraceChart, 2000));
+async function loadGraceChart() {
+  try {
+    const r = await fetch('/api/grace/timeseries?start_year=2020&end_year=2025');
+    if (!r.ok) return;
+    const d = await r.json();
+    const ctx = document.getElementById('grace-chart').getContext('2d');
+    new Chart(ctx, {
+      type: 'bar',
+      data: {
+        labels: d.series.map(s => s.period),
+        datasets: [{
+          data: d.series.map(s => s.tws_cm),
+          backgroundColor: d.series.map(s => s.color + 'cc'),
+          borderColor: d.series.map(s => s.color),
+          borderWidth: 1,
+          borderRadius: 2
+        }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+          legend: { display: false },
+          tooltip: {
+            backgroundColor: '#1a1f2e',
+            titleColor: '#94a3b8',
+            bodyColor: '#e2e8f0',
+            callbacks: {
+              label: c => `TWS: ${c.parsed.y.toFixed(2)} cm EWH`,
+              afterLabel: c => `Status: ${d.series[c.dataIndex].status}`
+            }
+          }
+        },
+        scales: {
+          x: { ticks: { color:'#475569', font:{size:9}, maxRotation:45 }, grid: { color:'#1e2433' } },
+          y: { ticks: { color:'#475569', font:{size:10}, callback: v => v+' cm' }, grid: { color:'#1e2433' } }
+        }
+      }
+    });
+  } catch(e) { console.log('GRACE error:', e); }
+}
+</script>

@@ -1,0 +1,434 @@
+"""
+NTB Groundwater Monitoring API
+Landasan hukum: PP No. 43 Tahun 2008 tentang Air Tanah
+Referensi ilmiah: NASA GRACE RL06 Mascon Solutions
+"""
+
+from fastapi import FastAPI, HTTPException, Query
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
+import asyncpg
+import os
+import json
+from datetime import datetime, date
+from typing import Optional
+import math
+
+app = FastAPI(
+    title="NTB Groundwater Monitoring API",
+    description="Platform monitoring air tanah Nusa Tenggara Barat berbasis satelit NASA GRACE dan data lapangan. Referensi: PP 43/2008, Perpres 33/2018.",
+    version="1.0.0"
+)
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+DATABASE_URL = os.getenv("DATABASE_URL", "postgresql://rizki:ntb_env_2024@db:5432/ntb_groundwater")
+
+
+async def get_db():
+    return await asyncpg.connect(DATABASE_URL)
+
+
+# ============================================================
+# ROOT
+# ============================================================
+@app.get("/")
+async def root():
+    return {
+        "platform": "NTB Groundwater Monitoring",
+        "version": "1.0.0",
+        "legal_basis": ["PP No. 43 Tahun 2008", "Perpres No. 33 Tahun 2018", "PerMenLHK P.68/2016"],
+        "data_sources": ["NASA GRACE RL06 Mascon", "Sentinel-2 MSI", "Data lapangan ESDM NTB"],
+        "coverage": "Nusa Tenggara Barat, Indonesia",
+        "docs": "/docs"
+    }
+
+
+# ============================================================
+# ENDPOINT 1: Semua sumur sebagai GeoJSON
+# ============================================================
+@app.get("/wells/geojson")
+async def get_wells_geojson(
+    kabupaten: Optional[str] = Query(None, description="Filter per kabupaten"),
+    status: Optional[str] = Query(None, description="Filter: normal, waspada, kritis, sangat_kritis")
+):
+    """
+    Semua sumur pantau NTB dalam format GeoJSON.
+    Siap dikonsumsi langsung oleh MapLibre GL JS.
+    """
+    conn = await get_db()
+    try:
+        query = """
+            SELECT
+                id, well_code, name, kecamatan, kabupaten,
+                well_type, depth_m, aquifer_type, status,
+                water_level_m, measured_at, ph, conductivity_us,
+                status_level, geometry
+            FROM well_latest_status
+            WHERE 1=1
+        """
+        params = []
+        if kabupaten:
+            params.append(kabupaten)
+            query += f" AND LOWER(kabupaten) LIKE LOWER(${ len(params)})"
+            params[-1] = f"%{kabupaten}%"
+        if status:
+            params.append(status)
+            query += f" AND status_level = ${ len(params)}"
+
+        rows = await conn.fetch(query, *params)
+
+        features = []
+        for row in rows:
+            geom = row["geometry"]
+            if isinstance(geom, str):
+                geom = json.loads(geom)
+
+            # Hitung persentase muka air (0-100%)
+            pct = None
+            if row["water_level_m"] and row["depth_m"] and row["depth_m"] > 0:
+                pct = round((row["water_level_m"] / row["depth_m"]) * 100, 1)
+
+            features.append({
+                "type": "Feature",
+                "geometry": geom,
+                "properties": {
+                    "id": row["id"],
+                    "well_code": row["well_code"],
+                    "name": row["name"],
+                    "kecamatan": row["kecamatan"],
+                    "kabupaten": row["kabupaten"],
+                    "well_type": row["well_type"],
+                    "depth_m": float(row["depth_m"]) if row["depth_m"] else None,
+                    "aquifer_type": row["aquifer_type"],
+                    "water_level_m": float(row["water_level_m"]) if row["water_level_m"] else None,
+                    "water_level_pct": pct,
+                    "ph": float(row["ph"]) if row["ph"] else None,
+                    "conductivity_us": float(row["conductivity_us"]) if row["conductivity_us"] else None,
+                    "measured_at": row["measured_at"].isoformat() if row["measured_at"] else None,
+                    "status_level": row["status_level"],
+                    # warna untuk MapLibre
+                    "color": {
+                        "normal": "#1D9E75",
+                        "waspada": "#BA7517",
+                        "kritis": "#E24B4A",
+                        "sangat_kritis": "#791F1F",
+                        "tidak_ada_data": "#888780"
+                    }.get(row["status_level"], "#888780")
+                }
+            })
+
+        return {
+            "type": "FeatureCollection",
+            "metadata": {
+                "title": "Sumur Pantau Air Tanah NTB",
+                "legal_reference": "PP No. 43 Tahun 2008",
+                "total_wells": len(features),
+                "generated_at": datetime.now().isoformat(),
+                "crs": "EPSG:4326"
+            },
+            "features": features
+        }
+    finally:
+        await conn.close()
+
+
+# ============================================================
+# ENDPOINT 2: Time series satu sumur
+# ============================================================
+@app.get("/wells/{well_id}/timeseries")
+async def get_well_timeseries(
+    well_id: int,
+    months: int = Query(12, description="Jumlah bulan ke belakang", ge=1, le=60)
+):
+    """
+    Data time series pengukuran untuk satu sumur.
+    Digunakan untuk chart di popup dashboard.
+    """
+    conn = await get_db()
+    try:
+        well = await conn.fetchrow(
+            "SELECT * FROM wells WHERE id = $1", well_id
+        )
+        if not well:
+            raise HTTPException(status_code=404, detail=f"Sumur ID {well_id} tidak ditemukan")
+
+        measurements = await conn.fetch("""
+            SELECT
+                DATE_TRUNC('month', measured_at) AS period,
+                ROUND(AVG(water_level_m)::numeric, 3) AS avg_water_level,
+                ROUND(AVG(water_temp_c)::numeric, 2) AS avg_temp,
+                ROUND(AVG(ph)::numeric, 2) AS avg_ph,
+                ROUND(AVG(conductivity_us)::numeric, 1) AS avg_conductivity,
+                COUNT(*) AS n_measurements
+            FROM measurements
+            WHERE well_id = $1
+              AND measured_at >= NOW() - INTERVAL '1 month' * $2
+            GROUP BY DATE_TRUNC('month', measured_at)
+            ORDER BY period ASC
+        """, well_id, months)
+
+        series = [{
+            "period": row["period"].strftime("%Y-%m"),
+            "water_level_m": float(row["avg_water_level"]) if row["avg_water_level"] else None,
+            "water_temp_c": float(row["avg_temp"]) if row["avg_temp"] else None,
+            "ph": float(row["avg_ph"]) if row["avg_ph"] else None,
+            "conductivity_us": float(row["avg_conductivity"]) if row["avg_conductivity"] else None,
+            "n_measurements": row["n_measurements"]
+        } for row in measurements]
+
+        # Statistik
+        levels = [s["water_level_m"] for s in series if s["water_level_m"]]
+        stats = {}
+        if levels:
+            stats = {
+                "min": round(min(levels), 3),
+                "max": round(max(levels), 3),
+                "mean": round(sum(levels)/len(levels), 3),
+                "trend": "menurun" if len(levels) >= 2 and levels[-1] > levels[0] else "stabil_atau_naik"
+            }
+
+        return {
+            "well": {
+                "id": well["id"],
+                "well_code": well["well_code"],
+                "name": well["name"],
+                "kabupaten": well["kabupaten"],
+                "depth_m": float(well["depth_m"]) if well["depth_m"] else None,
+                "aquifer_type": well["aquifer_type"]
+            },
+            "period_months": months,
+            "statistics": stats,
+            "series": series,
+            "legal_note": "Data monitoring sesuai PP No. 43 Tahun 2008 Pasal 15"
+        }
+    finally:
+        await conn.close()
+
+
+# ============================================================
+# ENDPOINT 3: Data GRACE TWS anomali
+# ============================================================
+@app.get("/grace/tws")
+async def get_grace_tws(
+    start_date: Optional[str] = Query(None, description="Format: YYYY-MM"),
+    end_date: Optional[str] = Query(None, description="Format: YYYY-MM"),
+    bbox: Optional[str] = Query(None, description="lon_min,lat_min,lon_max,lat_max")
+):
+    """
+    Data anomali Terrestrial Water Storage dari NASA GRACE/GRACE-FO.
+    Unit: cm equivalent water height (EWH).
+    Referensi: GRACE RL06 Mascon Solutions (Watkins et al., 2015)
+    """
+    conn = await get_db()
+    try:
+        query = """
+            SELECT period_date, lat, lon, tws_anomaly, uncertainty,
+                   ST_AsGeoJSON(geom)::json AS geometry
+            FROM grace_tws
+            WHERE 1=1
+        """
+        params = []
+
+        if start_date:
+            params.append(f"{start_date}-01")
+            query += f" AND period_date >= ${ len(params)}::date"
+        if end_date:
+            params.append(f"{end_date}-01")
+            query += f" AND period_date <= ${ len(params)}::date"
+        if bbox:
+            try:
+                lon_min, lat_min, lon_max, lat_max = map(float, bbox.split(","))
+                params.append(lon_min); params.append(lat_min)
+                params.append(lon_max); params.append(lat_max)
+                i = len(params)
+                query += f" AND ST_Within(geom, ST_MakeEnvelope(${i-3},${i-2},${i-1},${i},4326))"
+            except:
+                raise HTTPException(status_code=400, detail="Format bbox: lon_min,lat_min,lon_max,lat_max")
+
+        query += " ORDER BY period_date, lat, lon"
+        rows = await conn.fetch(query, *params)
+
+        features = [{
+            "type": "Feature",
+            "geometry": json.loads(row["geometry"]) if isinstance(row["geometry"], str) else row["geometry"],
+            "properties": {
+                "period": row["period_date"].strftime("%Y-%m"),
+                "tws_anomaly_cm": float(row["tws_anomaly"]) if row["tws_anomaly"] else None,
+                "uncertainty_cm": float(row["uncertainty"]) if row["uncertainty"] else None,
+                "lat": float(row["lat"]),
+                "lon": float(row["lon"])
+            }
+        } for row in rows]
+
+        return {
+            "type": "FeatureCollection",
+            "metadata": {
+                "title": "GRACE/GRACE-FO Terrestrial Water Storage Anomaly — NTB",
+                "data_source": "NASA GRACE RL06 Mascon Solutions",
+                "unit": "cm equivalent water height (EWH)",
+                "reference": "Watkins et al. (2015), doi:10.1002/2014JB011547",
+                "interpretation": "Nilai negatif = defisit air, nilai positif = surplus air dibanding rata-rata 2004-2009",
+                "total_records": len(features)
+            },
+            "features": features
+        }
+    finally:
+        await conn.close()
+
+
+# ============================================================
+# ENDPOINT 4: Ringkasan status per kabupaten
+# ============================================================
+@app.get("/summary/kabupaten")
+async def get_summary_by_kabupaten():
+    """Ringkasan kondisi air tanah per kabupaten untuk kartu dashboard."""
+    conn = await get_db()
+    try:
+        rows = await conn.fetch("""
+            SELECT
+                kabupaten,
+                COUNT(*) AS total_wells,
+                COUNT(*) FILTER (WHERE status_level = 'normal') AS normal,
+                COUNT(*) FILTER (WHERE status_level = 'waspada') AS waspada,
+                COUNT(*) FILTER (WHERE status_level = 'kritis') AS kritis,
+                COUNT(*) FILTER (WHERE status_level = 'sangat_kritis') AS sangat_kritis,
+                COUNT(*) FILTER (WHERE status_level = 'tidak_ada_data') AS no_data,
+                ROUND(AVG(water_level_m)::numeric, 2) AS avg_water_level_m,
+                ROUND(AVG(ph)::numeric, 2) AS avg_ph
+            FROM well_latest_status
+            GROUP BY kabupaten
+            ORDER BY kabupaten
+        """)
+
+        result = []
+        for row in rows:
+            total = row["total_wells"]
+            kritis_count = (row["kritis"] or 0) + (row["sangat_kritis"] or 0)
+            # Level risiko keseluruhan kabupaten
+            if total > 0:
+                kritis_pct = (kritis_count / total) * 100
+                if kritis_pct >= 50:
+                    risk = "KRITIS"
+                elif kritis_pct >= 25:
+                    risk = "WASPADA"
+                else:
+                    risk = "NORMAL"
+            else:
+                risk = "TIDAK_ADA_DATA"
+
+            result.append({
+                "kabupaten": row["kabupaten"],
+                "total_wells": total,
+                "status_breakdown": {
+                    "normal": row["normal"] or 0,
+                    "waspada": row["waspada"] or 0,
+                    "kritis": row["kritis"] or 0,
+                    "sangat_kritis": row["sangat_kritis"] or 0,
+                    "tidak_ada_data": row["no_data"] or 0
+                },
+                "avg_water_level_m": float(row["avg_water_level_m"]) if row["avg_water_level_m"] else None,
+                "avg_ph": float(row["avg_ph"]) if row["avg_ph"] else None,
+                "overall_risk": risk
+            })
+
+        return {
+            "generated_at": datetime.now().isoformat(),
+            "total_kabupaten": len(result),
+            "legal_basis": "PP No. 43 Tahun 2008",
+            "data": result
+        }
+    finally:
+        await conn.close()
+
+
+# ============================================================
+# ENDPOINT 5: Health check
+# ============================================================
+@app.get("/health")
+async def health():
+    try:
+        conn = await get_db()
+        await conn.fetchval("SELECT 1")
+        await conn.close()
+        return {"status": "ok", "database": "connected", "timestamp": datetime.now().isoformat()}
+    except Exception as e:
+        raise HTTPException(status_code=503, detail=f"Database error: {str(e)}")
+
+
+# ============================================================
+# ENDPOINT 6: GRACE TWS time series NTB (untuk chart dashboard)
+# ============================================================
+@app.get("/grace/timeseries")
+async def get_grace_timeseries(
+    start_year: int = Query(2020, description="Tahun mulai"),
+    end_year: int   = Query(2025, description="Tahun akhir")
+):
+    """
+    Time series rata-rata TWS anomali NTB dari NASA GRACE.
+    Unit: cm equivalent water height (EWH).
+    Referensi: Watkins et al. (2015), doi:10.1002/2014JB011547
+    """
+    conn = await get_db()
+    try:
+        rows = await conn.fetch("""
+            SELECT
+                period_date,
+                ROUND(AVG(tws_anomaly)::numeric, 2) AS avg_tws,
+                ROUND(AVG(uncertainty)::numeric, 2)  AS avg_uncertainty,
+                CASE
+                    WHEN AVG(tws_anomaly) < -2 THEN 'defisit_kritis'
+                    WHEN AVG(tws_anomaly) < 0  THEN 'defisit'
+                    WHEN AVG(tws_anomaly) < 2  THEN 'normal'
+                    ELSE 'surplus'
+                END AS status
+            FROM grace_tws
+            WHERE EXTRACT(YEAR FROM period_date)
+                  BETWEEN $1 AND $2
+            GROUP BY period_date
+            ORDER BY period_date
+        """, start_year, end_year)
+
+        series = [{
+            "period":      row["period_date"].strftime("%Y-%m"),
+            "tws_cm":      float(row["avg_tws"]),
+            "uncertainty": float(row["avg_uncertainty"]),
+            "status":      row["status"],
+            "color": {
+                "defisit_kritis": "#791F1F",
+                "defisit":        "#E24B4A",
+                "normal":         "#BA7517",
+                "surplus":        "#1D9E75"
+            }.get(row["status"], "#888780")
+        } for row in rows]
+
+        # Hitung statistik
+        vals = [s["tws_cm"] for s in series]
+        defisit_months = [s for s in series if "defisit" in s["status"]]
+
+        return {
+            "metadata": {
+                "title":      "GRACE/GRACE-FO TWS Anomaly — NTB",
+                "unit":       "cm equivalent water height (EWH)",
+                "baseline":   "2004-2009 mean",
+                "source":     "NASA GRACE RL06.3 Mascon",
+                "reference":  "Watkins et al. (2015)",
+                "coverage":   "Nusa Tenggara Barat (4x8 grid, 0.5deg resolution)",
+                "period":     f"{start_year}–{end_year}"
+            },
+            "statistics": {
+                "mean_tws":       round(sum(vals)/len(vals), 2) if vals else None,
+                "min_tws":        round(min(vals), 2) if vals else None,
+                "max_tws":        round(max(vals), 2) if vals else None,
+                "defisit_months": len(defisit_months),
+                "total_months":   len(series)
+            },
+            "series": series
+        }
+    finally:
+        await conn.close()
