@@ -190,7 +190,7 @@ GRACE Satellite Grid (NTB):
 - [x] **Phase 1** — Docker stack, PostGIS schema, FastAPI, MapLibre dashboard
 - [x] **Phase 2** — NASA GRACE data pipeline, TWS anomaly visualization
 - [ ] **Phase 3** — Sentinel-2 NDVI/NDWI layer via Google Earth Engine
-- [ ] **Phase 4** — Claude API integration for AI-powered anomaly interpretation
+- [ ] **Phase 4** — API integration for AI-powered anomaly interpretation
 - [ ] **Phase 5** — Full dashboard UI with export (CSV, PDF report)
 - [ ] **Phase 6** — Methodology note, VPS deployment, presentation to Dinas ESDM NTB
 
