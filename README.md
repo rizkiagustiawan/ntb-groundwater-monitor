@@ -102,7 +102,7 @@ Well status classification (Normal / Waspada / Kritis / Sangat Kritis) is derive
 
 ### 1. Clone repository
 ```bash
-git clone https://github.com/YOUR_USERNAME/ntb-groundwater-monitor.git
+git clone https://github.com/rizkiagustiawan/ntb-groundwater-monitor.git
 cd ntb-groundwater-monitor
 ```
 
