@@ -322,7 +322,11 @@ function addWellLayers(geojson){
   map.addSource('wells',{type:'geojson',data:geojson});
   map.addLayer({id:'wells-glow',type:'circle',source:'wells',paint:{'circle-radius':16,'circle-color':['get','color'],'circle-opacity':0.12,'circle-stroke-width':0}});
   map.addLayer({id:'wells-circle',type:'circle',source:'wells',paint:{'circle-radius':['interpolate',['linear'],['zoom'],7,5,13,9],'circle-color':['get','color'],'circle-stroke-color':['get','color'],'circle-stroke-width':1.5,'circle-stroke-opacity':0.6,'circle-opacity':1}});
-  map.on('click','wells-circle',e=>{const p=e.features[0].properties;selectWell(p.id,[e.features[0].geometry.coordinates[0],e.features[0].geometry.coordinates[1]]);});
+  map.on('click','wells-circle',e=>{
+    const p=e.features[0].properties;
+    const coords=e.features[0].geometry.coordinates;
+    selectWell(p.id,[parseFloat(coords[0]),parseFloat(coords[1])]);
+  });
   map.on('mouseenter','wells-circle',()=>{map.getCanvas().style.cursor='pointer';});
   map.on('mouseleave','wells-circle',()=>{map.getCanvas().style.cursor='';});
 }
@@ -340,7 +344,10 @@ function renderList(features){
   const sl={normal:'Normal',waspada:'Waspada',kritis:'Kritis',sangat_kritis:'S.Kritis',tidak_ada_data:'–'};
   document.getElementById('well-list').innerHTML=features.map(f=>{
     const p=f.properties;
-    return `<div class="well-item${selId===p.id?' active':''}" id="li-${p.id}" onclick="selectWell(${p.id},[${f.geometry.coordinates}])">
+    const coords=f.geometry.coordinates;
+    const lon=parseFloat(coords[0]);
+    const lat=parseFloat(coords[1]);
+    return `<div class="well-item${selId===p.id?' active':''}" id="li-${p.id}" onclick="selectWell(${p.id},[${lon},${lat}])">
       <div class="well-dot" style="background:${p.color||'#4a5568'}"></div>
       <div style="flex:1;min-width:0">
         <div class="well-name">${p.name||p.well_code}</div>
@@ -454,23 +461,24 @@ async function loadNDVI(){
     map.addSource('ndvi',{type:'geojson',data:d});
     map.addLayer({id:'ndvi-ring',type:'circle',source:'ndvi',paint:{
       'circle-radius':14,
-      'circle-color':'transparent',
+      'circle-color':'rgba(0,0,0,0)',
       'circle-stroke-color':['get','color'],
       'circle-stroke-width':2,
       'circle-stroke-opacity':0.7
     }},'wells-glow');
     map.on('click','ndvi-ring',async e=>{
       const p=e.features[0].properties;
-      const coords=e.features[0].geometry.coordinates;
+      const rawCoords=e.features[0].geometry.coordinates;
+      const coords=[parseFloat(rawCoords[0]),parseFloat(rawCoords[1])];
       document.getElementById('detail').classList.add('open');
       document.getElementById('det-name').textContent=`NDVI — ${p.location}`;
       document.getElementById('det-sub').textContent=p.kabupaten;
       const c=p.color||'#10b981';
-      document.getElementById('det-badge').innerHTML=`<div class="status-pill" style="background:${c}18;color:${c};border-color:${c}40;margin-bottom:10px">${p.kondisi?.toUpperCase()||'NDVI'} — ${p.avg_ndvi}</div>`;
+      document.getElementById('det-badge').innerHTML=`<div class="status-pill" style="background:${c}18;color:${c};border-color:${c}40;margin-bottom:10px">${(p.kondisi||'NDVI').toUpperCase()} — ${parseFloat(p.avg_ndvi).toFixed(3)}</div>`;
       document.getElementById('det-metrics').innerHTML=`
-        <div class="metric"><span class="metric-k">Rata-rata NDVI</span><span class="metric-v" style="color:${c}">${p.avg_ndvi}</span></div>
-        <div class="metric"><span class="metric-k">Min NDVI</span><span class="metric-v">${p.min_ndvi}</span></div>
-        <div class="metric"><span class="metric-k">Max NDVI</span><span class="metric-v">${p.max_ndvi}</span></div>
+        <div class="metric"><span class="metric-k">Rata-rata NDVI</span><span class="metric-v" style="color:${c}">${parseFloat(p.avg_ndvi).toFixed(3)}</span></div>
+        <div class="metric"><span class="metric-k">Min NDVI</span><span class="metric-v">${parseFloat(p.min_ndvi).toFixed(3)}</span></div>
+        <div class="metric"><span class="metric-k">Max NDVI</span><span class="metric-v">${parseFloat(p.max_ndvi).toFixed(3)}</span></div>
         <div class="metric"><span class="metric-k">Data bulan</span><span class="metric-v">${p.n_months} bulan</span></div>
         <div class="metric"><span class="metric-k">Resolusi</span><span class="metric-v">Sentinel-2 10m</span></div>`;
       document.getElementById('det-legal').innerHTML=`NDVI = (B8-B4)/(B8+B4) · Rouse et al. (1974)<br>Cloud filter: &lt;30% · 2023–2024`;
