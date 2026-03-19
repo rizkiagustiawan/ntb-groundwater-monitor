@@ -1,0 +1,17 @@
+# Data satelit - terlalu besar untuk GitHub (200MB+)
+data/grace/*.nc
+data/sentinel/
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.env
+ntb-env/
+
+# Docker volumes
+pgdata/
+
+# OS
+.DS_Store
+Thumbs.db
