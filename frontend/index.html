@@ -658,7 +658,7 @@ function renderChart(labels, values, depthM) {
   });
 }
 </script>
-<div id="grace-bottom" style="position:absolute;bottom:0;left:300px;right:0;height:200px;background:#0f1117;border-top:1px solid #1e2433;padding:12px 16px;z-index:5;"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px"><span style="font-size:12px;font-weight:500;color:#e2e8f0">NASA GRACE — Anomali Air Tanah NTB 2020-2025</span><div style="font-size:10px;display:flex;gap:10px"><span style="color:#1D9E75">■ Surplus</span><span style="color:#BA7517">■ Normal</span><span style="color:#E24B4A">■ Defisit</span></div></div><div style="height:140px"><canvas id="grace-chart"></canvas></div></div></body>
+<div id="grace-bottom" style="position:relative;left:0;right:0;height:200px;background:#0f1117;border-top:1px solid #1e2433;padding:12px 16px;z-index:1;"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px"><span style="font-size:12px;font-weight:500;color:#e2e8f0">NASA GRACE — Anomali Air Tanah NTB 2020-2025</span><div style="font-size:10px;display:flex;gap:10px"><span style="color:#1D9E75">■ Surplus</span><span style="color:#BA7517">■ Normal</span><span style="color:#E24B4A">■ Defisit</span></div></div><div style="height:140px"><canvas id="grace-chart"></canvas></div></div></body>
 </html>
 <script>
 window.addEventListener('load', () => setTimeout(loadGraceChart, 2000));
