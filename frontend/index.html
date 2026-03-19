@@ -8,149 +8,199 @@
 <script src="https://unpkg.com/maplibre-gl@4.1.2/dist/maplibre-gl.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 <style>
-  * { margin:0; padding:0; box-sizing:border-box; }
-  body { font-family: system-ui, -apple-system, sans-serif; background:#0f1117; color:#e2e8f0; height:100vh; display:flex; flex-direction:column; overflow:hidden; }
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&family=JetBrains+Mono:wght@400;500&display=swap');
 
-  /* HEADER */
-  header { background:#0f1117; border-bottom:1px solid #1e2433; padding:0 20px; height:52px; display:flex; align-items:center; justify-content:space-between; flex-shrink:0; z-index:10; }
-  .logo { display:flex; align-items:center; gap:10px; }
-  .logo-dot { width:10px; height:10px; border-radius:50%; background:#1D9E75; box-shadow:0 0 8px #1D9E75; }
-  .logo-text { font-size:15px; font-weight:600; letter-spacing:-.01em; }
-  .logo-sub { font-size:11px; color:#64748b; margin-top:1px; }
-  .header-badges { display:flex; gap:8px; }
-  .hbadge { font-size:10px; padding:3px 8px; border-radius:4px; border:1px solid #1e2433; color:#94a3b8; }
+*{margin:0;padding:0;box-sizing:border-box}
+:root{
+  --bg:#080c14;
+  --surface:#0d1421;
+  --surface2:#111928;
+  --border:#1a2438;
+  --border2:#243048;
+  --text:#e2e8f0;
+  --muted:#4a5568;
+  --muted2:#2d3748;
+  --green:#10b981;
+  --green-dim:#064e3b;
+  --amber:#f59e0b;
+  --amber-dim:#451a03;
+  --red:#ef4444;
+  --red-dim:#450a0a;
+  --blue:#3b82f6;
+  --blue-dim:#1e3a5f;
+  --accent:#00d4ff;
+}
 
-  /* LAYOUT */
-  .main { display:flex; flex:1; overflow:hidden; }
+body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--text);height:100vh;overflow:hidden;display:flex;flex-direction:column}
 
-  /* SIDEBAR */
-  .sidebar { width:300px; flex-shrink:0; background:#0f1117; border-right:1px solid #1e2433; display:flex; flex-direction:column; overflow:hidden; }
-  .sidebar-section { padding:14px 16px; border-bottom:1px solid #1e2433; }
-  .sidebar-label { font-size:10px; text-transform:uppercase; letter-spacing:.08em; color:#475569; font-weight:600; margin-bottom:10px; }
+/* TOPBAR */
+.topbar{height:48px;background:var(--surface);border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;padding:0 16px;flex-shrink:0;z-index:100}
+.topbar-left{display:flex;align-items:center;gap:12px}
+.logo-pulse{width:8px;height:8px;border-radius:50%;background:var(--green);box-shadow:0 0 0 0 var(--green);animation:pulse-ring 2s ease-out infinite}
+@keyframes pulse-ring{0%{box-shadow:0 0 0 0 rgba(16,185,129,.6)}70%{box-shadow:0 0 0 8px rgba(16,185,129,0)}100%{box-shadow:0 0 0 0 rgba(16,185,129,0)}}
+.logo-text{font-size:14px;font-weight:600;letter-spacing:-.02em}
+.logo-sub{font-size:10px;color:var(--muted);margin-left:4px;font-weight:400}
+.topbar-badges{display:flex;gap:6px}
+.badge{font-size:9px;padding:2px 7px;border-radius:3px;border:1px solid var(--border2);color:var(--muted);font-family:'JetBrains Mono',monospace;letter-spacing:.05em}
+.topbar-right{display:flex;align-items:center;gap:8px}
+.btn-pdf{font-size:11px;padding:5px 12px;background:var(--green);color:#fff;border:none;border-radius:5px;cursor:pointer;font-weight:500;transition:opacity .15s}
+.btn-pdf:hover{opacity:.85}
 
-  /* STAT CARDS */
-  .stat-grid { display:grid; grid-template-columns:1fr 1fr; gap:6px; }
-  .stat-card { background:#1a1f2e; border-radius:8px; padding:10px 12px; }
-  .stat-val { font-size:22px; font-weight:700; line-height:1; }
-  .stat-lbl { font-size:10px; color:#64748b; margin-top:3px; }
-  .c-green { color:#1D9E75; }
-  .c-amber { color:#BA7517; }
-  .c-red   { color:#E24B4A; }
-  .c-muted { color:#94a3b8; }
+/* MAIN LAYOUT */
+.main{flex:1;display:flex;overflow:hidden;position:relative}
 
-  /* FILTERS */
-  select, input[type=range] { width:100%; background:#1a1f2e; border:1px solid #1e2433; color:#e2e8f0; border-radius:6px; padding:7px 10px; font-size:12px; outline:none; }
-  select:focus { border-color:#1D9E75; }
+/* MAP */
+#map{flex:1;position:relative}
 
-  /* LEGEND */
-  .legend-item { display:flex; align-items:center; gap:8px; margin-bottom:6px; font-size:12px; color:#94a3b8; }
-  .legend-dot { width:10px; height:10px; border-radius:50%; flex-shrink:0; }
+/* FLOATING SIDEBAR */
+.sidebar{position:absolute;left:12px;top:12px;bottom:12px;width:260px;background:rgba(13,20,33,.92);backdrop-filter:blur(12px);border:1px solid var(--border);border-radius:12px;display:flex;flex-direction:column;overflow:hidden;z-index:10}
+.sidebar-header{padding:12px 14px;border-bottom:1px solid var(--border)}
+.sidebar-title{font-size:10px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.1em;margin-bottom:10px}
 
-  /* SIDEBAR SCROLL */
-  .sidebar-scroll { flex:1; overflow-y:auto; }
-  .sidebar-scroll::-webkit-scrollbar { width:4px; }
-  .sidebar-scroll::-webkit-scrollbar-track { background:transparent; }
-  .sidebar-scroll::-webkit-scrollbar-thumb { background:#1e2433; border-radius:2px; }
+/* STAT GRID */
+.stat-grid{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:0}
+.stat{background:var(--surface2);border-radius:7px;padding:8px 10px;border:1px solid var(--border)}
+.stat-val{font-size:20px;font-weight:600;line-height:1;font-family:'JetBrains Mono',monospace}
+.stat-lbl{font-size:9px;color:var(--muted);margin-top:3px;text-transform:uppercase;letter-spacing:.06em}
+.c-green{color:var(--green)}
+.c-amber{color:var(--amber)}
+.c-red{color:var(--red)}
+.c-muted{color:#94a3b8}
 
-  /* WELL LIST */
-  .well-item { padding:10px 16px; border-bottom:1px solid #1a1f2e; cursor:pointer; transition:background .15s; }
-  .well-item:hover { background:#1a1f2e; }
-  .well-item.selected { background:#0f2a1e; border-left:3px solid #1D9E75; }
-  .well-name { font-size:12px; font-weight:500; color:#e2e8f0; }
-  .well-meta { font-size:10px; color:#475569; margin-top:2px; }
-  .well-status { font-size:10px; padding:1px 6px; border-radius:3px; float:right; }
-  .s-normal   { background:#0a2a1e; color:#1D9E75; }
-  .s-waspada  { background:#2a1e0a; color:#BA7517; }
-  .s-kritis   { background:#2a0a0a; color:#E24B4A; }
-  .s-sangat_kritis { background:#1a0505; color:#F7C1C1; }
-  .s-tidak_ada_data { background:#1a1f2e; color:#475569; }
+/* FILTERS */
+.filter-section{padding:10px 14px;border-bottom:1px solid var(--border)}
+select{width:100%;background:var(--surface2);border:1px solid var(--border);color:var(--text);border-radius:6px;padding:6px 8px;font-size:11px;outline:none;margin-bottom:5px;font-family:'Inter',sans-serif}
+select:last-child{margin-bottom:0}
+select:focus{border-color:var(--accent)}
 
-  /* MAP */
-  #map { flex:1; }
+/* LEGEND */
+.legend-section{padding:10px 14px;border-bottom:1px solid var(--border)}
+.legend-item{display:flex;align-items:center;gap:7px;margin-bottom:5px;font-size:10px;color:var(--muted)}
+.legend-item:last-child{margin-bottom:0}
+.dot{width:8px;height:8px;border-radius:50%;flex-shrink:0}
 
-  /* PANEL KANAN - DETAIL SUMUR */
-  .detail-panel { width:320px; flex-shrink:0; background:#0f1117; border-left:1px solid #1e2433; display:flex; flex-direction:column; overflow:hidden; transition:width .2s; }
-  .detail-panel.hidden { width:0; overflow:hidden; }
-  .detail-header { padding:14px 16px; border-bottom:1px solid #1e2433; display:flex; justify-content:space-between; align-items:flex-start; }
-  .detail-title { font-size:13px; font-weight:600; }
-  .detail-sub   { font-size:11px; color:#475569; margin-top:2px; }
-  .close-btn { background:none; border:none; color:#475569; cursor:pointer; font-size:16px; padding:0; line-height:1; }
-  .close-btn:hover { color:#e2e8f0; }
-  .detail-body { flex:1; overflow-y:auto; padding:14px 16px; }
-  .detail-body::-webkit-scrollbar { width:4px; }
-  .detail-body::-webkit-scrollbar-thumb { background:#1e2433; }
+/* AI PANEL */
+.ai-section{padding:10px 14px;border-bottom:1px solid var(--border)}
+.ai-label{font-size:9px;font-weight:600;color:var(--accent);text-transform:uppercase;letter-spacing:.1em;margin-bottom:6px;display:flex;align-items:center;gap:5px}
+.ai-label::before{content:'';width:5px;height:5px;border-radius:50%;background:var(--accent);display:inline-block}
+.ai-text{font-size:10px;color:#94a3b8;line-height:1.65;max-height:110px;overflow-y:auto}
+.ai-text::-webkit-scrollbar{width:3px}
+.ai-text::-webkit-scrollbar-thumb{background:var(--border2);border-radius:2px}
+.btn-ai{width:100%;margin-top:7px;padding:5px;background:transparent;border:1px solid var(--border2);color:var(--muted);font-size:10px;border-radius:5px;cursor:pointer;transition:all .15s;font-family:'Inter',sans-serif}
+.btn-ai:hover{border-color:var(--accent);color:var(--accent)}
 
-  .metric-row { display:flex; justify-content:space-between; padding:7px 0; border-bottom:1px solid #1a1f2e; font-size:12px; }
-  .metric-key { color:#475569; }
-  .metric-val { color:#e2e8f0; font-weight:500; }
+/* WELL LIST */
+.well-label{padding:8px 14px 4px;font-size:9px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.1em;flex-shrink:0}
+.well-scroll{flex:1;overflow-y:auto}
+.well-scroll::-webkit-scrollbar{width:3px}
+.well-scroll::-webkit-scrollbar-thumb{background:var(--border2);border-radius:2px}
+.well-item{padding:8px 14px;border-bottom:1px solid var(--border);cursor:pointer;transition:background .1s;display:flex;align-items:center;gap:8px}
+.well-item:hover{background:var(--surface2)}
+.well-item.active{background:rgba(0,212,255,.06);border-left:2px solid var(--accent)}
+.well-dot{width:7px;height:7px;border-radius:50%;flex-shrink:0}
+.well-name{font-size:11px;font-weight:500;color:var(--text);flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.well-kec{font-size:9px;color:var(--muted)}
+.well-status{font-size:9px;padding:1px 5px;border-radius:3px;white-space:nowrap}
+.s-normal{background:var(--green-dim);color:var(--green)}
+.s-waspada{background:var(--amber-dim);color:var(--amber)}
+.s-kritis,.s-sangat_kritis{background:var(--red-dim);color:var(--red)}
+.s-tidak_ada_data{background:var(--muted2);color:var(--muted)}
 
-  .status-badge { display:inline-block; padding:3px 10px; border-radius:4px; font-size:11px; font-weight:600; margin-top:8px; margin-bottom:12px; }
+/* DETAIL PANEL */
+.detail{position:absolute;right:12px;top:12px;bottom:12px;width:300px;background:rgba(13,20,33,.95);backdrop-filter:blur(12px);border:1px solid var(--border);border-radius:12px;display:flex;flex-direction:column;overflow:hidden;z-index:10;transform:translateX(320px);transition:transform .25s cubic-bezier(.4,0,.2,1)}
+.detail.open{transform:translateX(0)}
+.det-header{padding:12px 14px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:flex-start}
+.det-title{font-size:13px;font-weight:600;line-height:1.3}
+.det-sub{font-size:10px;color:var(--muted);margin-top:2px}
+.btn-close{background:none;border:none;color:var(--muted);cursor:pointer;font-size:16px;line-height:1;padding:2px}
+.btn-close:hover{color:var(--text)}
+.det-body{flex:1;overflow-y:auto;padding:12px 14px}
+.det-body::-webkit-scrollbar{width:3px}
+.det-body::-webkit-scrollbar-thumb{background:var(--border2);border-radius:2px}
+.status-pill{display:inline-flex;align-items:center;gap:5px;padding:4px 10px;border-radius:20px;font-size:10px;font-weight:600;margin-bottom:12px;border:1px solid}
+.metric{display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-bottom:1px solid var(--border);font-size:11px}
+.metric:last-of-type{border-bottom:none}
+.metric-k{color:var(--muted)}
+.metric-v{font-weight:500;font-family:'JetBrains Mono',monospace;font-size:11px}
+.chart-label{font-size:9px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.1em;margin:12px 0 6px}
+.chart-wrap{height:130px}
+.legal-note{font-size:9px;color:var(--muted2);line-height:1.65;margin-top:12px;padding:8px;background:var(--surface2);border-radius:6px;border:1px solid var(--border)}
 
-  .chart-wrap { margin-top:14px; }
-  .chart-label { font-size:10px; text-transform:uppercase; letter-spacing:.06em; color:#475569; margin-bottom:8px; }
-  .chart-canvas-wrap { height:160px; }
+/* GRACE BAR - bottom strip */
+.grace-strip{height:130px;background:var(--surface);border-top:1px solid var(--border);padding:8px 16px 8px;flex-shrink:0;display:flex;flex-direction:column}
+.grace-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:4px}
+.grace-title{font-size:10px;font-weight:600;color:var(--text)}
+.grace-legend{display:flex;gap:10px;font-size:9px}
+.grace-legend span{display:flex;align-items:center;gap:3px}
+.grace-canvas-wrap{flex:1}
 
-  .legal-note { font-size:10px; color:#334155; margin-top:14px; line-height:1.6; padding:8px 10px; background:#1a1f2e; border-radius:6px; }
+/* MAPLIBRE OVERRIDES */
+.maplibregl-ctrl-group{background:var(--surface)!important;border:1px solid var(--border)!important;border-radius:7px!important}
+.maplibregl-ctrl-group button{color:var(--text)!important}
+.maplibregl-ctrl-attrib{background:rgba(13,20,33,.7)!important;color:var(--muted)!important;font-size:9px!important}
+.maplibregl-ctrl-scale{background:rgba(13,20,33,.7)!important;border-color:var(--muted)!important;color:var(--muted)!important;font-size:9px!important}
 
-  /* LOADING */
-  .loading { position:absolute; inset:0; background:rgba(15,17,23,.8); display:flex; align-items:center; justify-content:center; z-index:100; flex-direction:column; gap:10px; }
-  .loading-dot { width:8px; height:8px; border-radius:50%; background:#1D9E75; animation:pulse 1.2s ease-in-out infinite; }
-  .loading-dot:nth-child(2) { animation-delay:.2s; }
-  .loading-dot:nth-child(3) { animation-delay:.4s; }
-  .loading-dots { display:flex; gap:6px; }
-  @keyframes pulse { 0%,100%{opacity:.3;transform:scale(.8)} 50%{opacity:1;transform:scale(1)} }
-  .loading-text { font-size:13px; color:#64748b; }
-
-  .api-url { font-size:10px; color:#334155; }
+/* LOADING */
+.loader{position:absolute;inset:0;background:var(--bg);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;z-index:200}
+.loader-dots{display:flex;gap:6px}
+.loader-dot{width:7px;height:7px;border-radius:50%;background:var(--accent);animation:blink 1.2s ease-in-out infinite}
+.loader-dot:nth-child(2){animation-delay:.2s}
+.loader-dot:nth-child(3){animation-delay:.4s}
+@keyframes blink{0%,100%{opacity:.2;transform:scale(.8)}50%{opacity:1;transform:scale(1)}}
+.loader-text{font-size:12px;color:var(--muted);font-family:'JetBrains Mono',monospace}
 </style>
 </head>
 <body>
 
-<header>
-  <div class="logo">
-    <div class="logo-dot"></div>
+<!-- TOPBAR -->
+<div class="topbar">
+  <div class="topbar-left">
+    <div class="logo-pulse"></div>
     <div>
-      <div class="logo-text">NTB Groundwater Monitor</div>
-      <div class="logo-sub">Platform Monitoring Air Tanah — Nusa Tenggara Barat</div>
+      <span class="logo-text">NTB Groundwater Monitor</span>
+      <span class="logo-sub">Platform Monitoring Air Tanah — Nusa Tenggara Barat</span>
     </div>
   </div>
-  <div style="display:flex;align-items:center;gap:12px"><a href="/api/report/pdf" target="_blank" style="font-size:11px;padding:4px 12px;background:#1D9E75;color:white;border-radius:6px;text-decoration:none;font-weight:500">Download Laporan PDF</a></div><div class="header-badges">
-    <span class="hbadge">PP 43/2008</span>
-    <span class="hbadge">GRACE RL06</span>
-    <span class="hbadge">v1.0.0</span>
+  <div class="topbar-badges">
+    <span class="badge">PP 43/2008</span>
+    <span class="badge">GRACE RL06.3</span>
+    <span class="badge">SENTINEL-2</span>
+    <span class="badge">v1.0.0</span>
   </div>
-</header>
+  <div class="topbar-right">
+    <button class="btn-pdf" onclick="window.open('/api/report/pdf','_blank')">Download Laporan PDF</button>
+  </div>
+</div>
 
+<!-- MAIN -->
 <div class="main">
-  <!-- SIDEBAR KIRI -->
+
+  <!-- MAP -->
+  <div id="map">
+    <div class="loader" id="loader">
+      <div class="loader-dots">
+        <div class="loader-dot"></div>
+        <div class="loader-dot"></div>
+        <div class="loader-dot"></div>
+      </div>
+      <div class="loader-text">Memuat data satelit NTB...</div>
+    </div>
+  </div>
+
+  <!-- SIDEBAR -->
   <div class="sidebar">
-    <!-- Stat Cards -->
-    <div class="sidebar-section">
-      <div class="sidebar-label">Ringkasan NTB</div>
+    <div class="sidebar-header">
+      <div class="sidebar-title">Ringkasan NTB</div>
       <div class="stat-grid">
-        <div class="stat-card">
-          <div class="stat-val c-muted" id="stat-total">–</div>
-          <div class="stat-lbl">Total sumur</div>
-        </div>
-        <div class="stat-card">
-          <div class="stat-val c-green" id="stat-normal">–</div>
-          <div class="stat-lbl">Normal</div>
-        </div>
-        <div class="stat-card">
-          <div class="stat-val c-amber" id="stat-waspada">–</div>
-          <div class="stat-lbl">Waspada</div>
-        </div>
-        <div class="stat-card">
-          <div class="stat-val c-red" id="stat-kritis">–</div>
-          <div class="stat-lbl">Kritis</div>
-        </div>
+        <div class="stat"><div class="stat-val c-muted" id="s-total">–</div><div class="stat-lbl">Total Sumur</div></div>
+        <div class="stat"><div class="stat-val c-green" id="s-normal">–</div><div class="stat-lbl">Normal</div></div>
+        <div class="stat"><div class="stat-val c-amber" id="s-waspada">–</div><div class="stat-lbl">Waspada</div></div>
+        <div class="stat"><div class="stat-val c-red" id="s-kritis">–</div><div class="stat-lbl">Kritis</div></div>
       </div>
     </div>
 
-    <!-- Filter -->
-    <div class="sidebar-section">
-      <div class="sidebar-label">Filter</div>
-      <select id="filter-kab" style="margin-bottom:6px" onchange="applyFilter()">
+    <div class="filter-section">
+      <select id="f-kab" onchange="applyFilter()">
         <option value="">Semua Kabupaten/Kota</option>
         <option value="Kab. Sumbawa">Kab. Sumbawa</option>
         <option value="Kab. Sumbawa Barat">Kab. Sumbawa Barat</option>
@@ -159,7 +209,7 @@
         <option value="Kota Bima">Kota Bima</option>
         <option value="Kab. Lombok Utara">Kab. Lombok Utara</option>
       </select>
-      <select id="filter-status" onchange="applyFilter()">
+      <select id="f-status" onchange="applyFilter()">
         <option value="">Semua Status</option>
         <option value="normal">Normal</option>
         <option value="waspada">Waspada</option>
@@ -168,539 +218,309 @@
       </select>
     </div>
 
-    <!-- Legend -->
-    <div class="sidebar-section">
-      <div class="sidebar-label">Status muka air tanah</div>
-      <div class="legend-item"><div class="legend-dot" style="background:#1D9E75"></div>Normal (< 30% kedalaman sumur)</div>
-      <div class="legend-item"><div class="legend-dot" style="background:#BA7517"></div>Waspada (30–60%)</div>
-      <div class="legend-item"><div class="legend-dot" style="background:#E24B4A"></div>Kritis (60–80%)</div>
-      <div class="legend-item"><div class="legend-dot" style="background:#791F1F"></div>Sangat kritis (> 80%)</div>
-      <div class="legend-item"><div class="legend-dot" style="background:#475569"></div>Tidak ada data</div>
+    <div class="legend-section">
+      <div class="legend-item"><div class="dot" style="background:#10b981"></div>Normal (< 30%)</div>
+      <div class="legend-item"><div class="dot" style="background:#f59e0b"></div>Waspada (30–60%)</div>
+      <div class="legend-item"><div class="dot" style="background:#ef4444"></div>Kritis (60–80%)</div>
+      <div class="legend-item"><div class="dot" style="background:#7f1d1d"></div>Sangat Kritis (> 80%)</div>
+      <div class="legend-item"><div class="dot" style="background:rgba(255,255,255,.15);border:1px solid #10b981"></div>NDVI Sentinel-2</div>
     </div>
 
-    <!-- Daftar sumur -->
-    <div class="sidebar-section" id="ai-section"><div class="sidebar-label">Interpretasi AI</div><div id="ai-text" style="font-size:11px;color:var(--color-text-secondary);line-height:1.7;max-height:200px;overflow-y:auto">Memuat analisis...</div><button onclick="loadAI()" style="margin-top:8px;font-size:11px;padding:4px 10px;border:0.5px solid var(--color-border-secondary);background:transparent;color:var(--color-text-secondary);cursor:pointer;border-radius:6px;width:100%">Perbarui Analisis AI</button></div><div class="sidebar-label" style="padding:10px 16px 4px; flex-shrink:0">Daftar Sumur Pantau</div>
-    <div class="sidebar-scroll" id="well-list"></div>
-  </div>
-
-  <!-- PETA -->
-  <div id="map">
-    <div class="loading" id="loading">
-      <div class="loading-dots">
-        <div class="loading-dot"></div>
-        <div class="loading-dot"></div>
-        <div class="loading-dot"></div>
-      </div>
-      <div class="loading-text">Memuat data sumur pantau NTB...</div>
+    <div class="ai-section">
+      <div class="ai-label">AI Interpretation</div>
+      <div class="ai-text" id="ai-text">Memuat analisis...</div>
+      <button class="btn-ai" onclick="loadAI()">Perbarui Analisis ↺</button>
     </div>
+
+    <div class="well-label">Daftar Sumur Pantau</div>
+    <div class="well-scroll" id="well-list"></div>
   </div>
 
-  <!-- PANEL DETAIL -->
-  <div class="detail-panel hidden" id="detail-panel">
-    <div class="detail-header">
+  <!-- DETAIL PANEL -->
+  <div class="detail" id="detail">
+    <div class="det-header">
       <div>
-        <div class="detail-title" id="det-name">–</div>
-        <div class="detail-sub" id="det-loc">–</div>
+        <div class="det-title" id="det-name">–</div>
+        <div class="det-sub" id="det-sub">–</div>
       </div>
-      <button class="close-btn" onclick="closeDetail()">✕</button>
+      <button class="btn-close" onclick="closeDetail()">✕</button>
     </div>
-    <div class="detail-body">
-      <div id="det-status-badge"></div>
+    <div class="det-body">
+      <div id="det-badge"></div>
       <div id="det-metrics"></div>
-      <div class="chart-wrap">
-        <div class="chart-label">Muka air tanah 12 bulan terakhir (m)</div>
-        <div class="chart-canvas-wrap"><canvas id="det-chart"></canvas></div>
-      </div>
+      <div class="chart-label">Muka Air Tanah 12 Bulan (m)</div>
+      <div class="chart-wrap"><canvas id="det-chart"></canvas></div>
       <div class="legal-note" id="det-legal"></div>
     </div>
   </div>
+
+</div>
+
+<!-- GRACE STRIP -->
+<div class="grace-strip">
+  <div class="grace-header">
+    <span class="grace-title">NASA GRACE/GRACE-FO — Anomali Air Tanah NTB 2020–2025</span>
+    <div class="grace-legend">
+      <span><span style="display:inline-block;width:8px;height:8px;background:#10b981;border-radius:2px"></span>Surplus</span>
+      <span><span style="display:inline-block;width:8px;height:8px;background:#f59e0b;border-radius:2px"></span>Normal</span>
+      <span><span style="display:inline-block;width:8px;height:8px;background:#ef4444;border-radius:2px"></span>Defisit</span>
+    </div>
+  </div>
+  <div class="grace-canvas-wrap"><canvas id="grace-chart"></canvas></div>
 </div>
 
 <script>
 const API = '/api';
-let map, allFeatures = [], chartInstance = null, selectedId = null;
+let map, allFeatures=[], chartInst=null, selId=null;
 
-// ── INISIALISASI PETA ──────────────────────────────────────
+// MAP INIT
 map = new maplibregl.Map({
-  container: 'map',
-  style: {
-    version: 8,
-    sources: {
-      'osm': {
-        type: 'raster',
-        tiles: ['https://tile.openstreetmap.org/{z}/{x}/{y}.png'],
-        tileSize: 256,
-        attribution: '© OpenStreetMap contributors'
-      }
-    },
-    layers: [{ id: 'osm', type: 'raster', source: 'osm', paint: { 'raster-opacity': 0.3 } }],
-    background: { type: 'background' }
+  container:'map',
+  style:{
+    version:8,
+    sources:{osm:{type:'raster',tiles:['https://tile.openstreetmap.org/{z}/{x}/{y}.png'],tileSize:256,attribution:'© OpenStreetMap'}},
+    layers:[{id:'osm',type:'raster',source:'osm',paint:{'raster-opacity':0.25,'raster-saturation':-0.8,'raster-brightness-min':0.1}}],
+    background:{type:'background',layout:{},paint:{'background-color':'#080c14'}}
   },
-  center: [117.8, -8.6],   // Tengah Sumbawa
-  zoom: 8,
-  minZoom: 6,
-  maxZoom: 16
+  center:[117.8,-8.6],zoom:8,minZoom:6,maxZoom:16
 });
+map.addControl(new maplibregl.NavigationControl(),'top-right');
+map.addControl(new maplibregl.ScaleControl({unit:'metric'}),'bottom-right');
+map.on('load',()=>{loadWells(); setTimeout(loadNDVI,1500); setTimeout(loadGrace,2000);});
 
-map.addControl(new maplibregl.NavigationControl(), 'top-right');
-map.addControl(new maplibregl.ScaleControl({ unit: 'metric' }), 'bottom-right');
-
-map.on('load', () => { loadWells(); setTimeout(loadNDVILayer, 1500); });
-
-
-// ── LOAD DATA SUMUR ───────────────────────────────────────
-async function loadWells() {
-  try {
-    const resp = await fetch(`${API}/wells/geojson`);
-    if (!resp.ok) throw new Error('API tidak dapat dijangkau');
-    const data = await resp.json();
-    allFeatures = data.features;
-
-    addWellLayers(data);
-    updateStats(data.features);
-    renderWellList(data.features);
-    document.getElementById('loading').style.display = 'none';
-  } catch(e) {
-    document.getElementById('loading').innerHTML = `
-      <div style="text-align:center;max-width:260px">
-        <div style="color:#E24B4A;font-size:13px;margin-bottom:8px">Tidak dapat terhubung ke API</div>
-        <div style="color:#475569;font-size:12px;line-height:1.7">Pastikan Docker sudah berjalan:<br><code style="color:#94a3b8">docker compose up -d</code><br><br>Lalu akses: <code style="color:#94a3b8">http://localhost:8000</code></div>
-        <div style="margin-top:12px;font-size:11px;color:#334155">Mode demo: memuat data simulasi...</div>
-      </div>`;
-    loadDemoData();
-  }
+// LOAD WELLS
+async function loadWells(){
+  try{
+    const r=await fetch(`${API}/wells/geojson`);
+    if(!r.ok)throw new Error();
+    const d=await r.json();
+    allFeatures=d.features;
+    addWellLayers(d);
+    updateStats(d.features);
+    renderList(d.features);
+    document.getElementById('loader').style.display='none';
+  }catch{loadDemo();}
 }
 
-
-// ── DEMO DATA (tanpa API) ─────────────────────────────────
-function loadDemoData() {
-  const demo = makeDemoGeoJSON();
-  allFeatures = demo.features;
-  setTimeout(() => {
-    addWellLayers(demo);
-    updateStats(demo.features);
-    renderWellList(demo.features);
-    document.getElementById('loading').style.display = 'none';
-  }, 800);
-}
-
-function makeDemoGeoJSON() {
-  const wells = [
-    { id:1, well_code:'SMB-001', name:'Sumur Pantau Sumbawa Kota', kecamatan:'Sumbawa', kabupaten:'Kab. Sumbawa', depth_m:45, aquifer_type:'bebas', water_level_m:13.5, water_level_pct:30, ph:7.1, conductivity_us:420, status_level:'normal', color:'#1D9E75', measured_at:'2025-03-01T00:00:00', lon:117.4174, lat:-8.4932 },
-    { id:2, well_code:'SMB-002', name:'Sumur Pantau Moyo Hilir', kecamatan:'Moyo Hilir', kabupaten:'Kab. Sumbawa', depth_m:38.5, aquifer_type:'bebas', water_level_m:19.3, water_level_pct:50, ph:6.8, conductivity_us:580, status_level:'waspada', color:'#BA7517', measured_at:'2025-03-01T00:00:00', lon:117.6012, lat:-8.5521 },
-    { id:3, well_code:'SMB-003', name:'Sumur Pantau Unter Iwes', kecamatan:'Unter Iwes', kabupaten:'Kab. Sumbawa', depth_m:52, aquifer_type:'tertekan', water_level_m:15.6, water_level_pct:30, ph:7.3, conductivity_us:310, status_level:'normal', color:'#1D9E75', measured_at:'2025-03-01T00:00:00', lon:117.3845, lat:-8.4234 },
-    { id:4, well_code:'KSB-002', name:'Sumur Pantau Sekongkang', kecamatan:'Sekongkang', kabupaten:'Kab. Sumbawa Barat', depth_m:65, aquifer_type:'tertekan', water_level_m:45.5, water_level_pct:70, ph:6.5, conductivity_us:890, status_level:'kritis', color:'#E24B4A', measured_at:'2025-03-01T00:00:00', lon:116.7012, lat:-8.9823 },
-    { id:5, well_code:'DMP-001', name:'Sumur Pantau Dompu Kota', kecamatan:'Dompu', kabupaten:'Kab. Dompu', depth_m:50, aquifer_type:'bebas', water_level_m:28.0, water_level_pct:56, ph:7.0, conductivity_us:510, status_level:'waspada', color:'#BA7517', measured_at:'2025-03-01T00:00:00', lon:118.4623, lat:-8.5312 },
-    { id:6, well_code:'BMA-001', name:'Sumur Pantau Raba', kecamatan:'Raba', kabupaten:'Kab. Bima', depth_m:55, aquifer_type:'tertekan', water_level_m:11.0, water_level_pct:20, ph:7.4, conductivity_us:380, status_level:'normal', color:'#1D9E75', measured_at:'2025-03-01T00:00:00', lon:118.7234, lat:-8.4823 },
-    { id:7, well_code:'BMA-004', name:'Sumur Pantau Sape', kecamatan:'Sape', kabupaten:'Kab. Bima', depth_m:52, aquifer_type:'tertekan', water_level_m:43.2, water_level_pct:83, ph:6.3, conductivity_us:1100, status_level:'sangat_kritis', color:'#791F1F', measured_at:'2025-03-01T00:00:00', lon:119.0123, lat:-8.5834 },
-    { id:8, well_code:'BIM-001', name:'Sumur Pantau Rasanae Barat', kecamatan:'Rasanae Barat', kabupaten:'Kota Bima', depth_m:45, aquifer_type:'bebas', water_level_m:22.0, water_level_pct:49, ph:6.9, conductivity_us:630, status_level:'waspada', color:'#BA7517', measured_at:'2025-03-01T00:00:00', lon:118.7134, lat:-8.4612 },
-    { id:9, well_code:'LUT-001', name:'Sumur Pantau Tanjung', kecamatan:'Tanjung', kabupaten:'Kab. Lombok Utara', depth_m:35, aquifer_type:'bebas', water_level_m:9.1, water_level_pct:26, ph:7.2, conductivity_us:290, status_level:'normal', color:'#1D9E75', measured_at:'2025-03-01T00:00:00', lon:116.1423, lat:-8.3512 },
+function loadDemo(){
+  const demo=[
+    {id:1,well_code:'SMB-001',name:'Sumbawa Kota',kecamatan:'Sumbawa',kabupaten:'Kab. Sumbawa',depth_m:45,aquifer_type:'bebas',water_level_m:20.97,water_level_pct:46.6,ph:6.94,conductivity_us:560,status_level:'waspada',color:'#f59e0b',measured_at:'2026-03-01',lon:117.418755,lat:-8.500053},
+    {id:2,well_code:'KSB-002',name:'Sekongkang',kecamatan:'Sekongkang',kabupaten:'Kab. Sumbawa Barat',depth_m:65,aquifer_type:'tertekan',water_level_m:45.5,water_level_pct:70,ph:6.5,conductivity_us:890,status_level:'kritis',color:'#ef4444',measured_at:'2026-03-01',lon:116.812017,lat:-8.969238},
+    {id:3,well_code:'DMP-001',name:'Dompu Kota',kecamatan:'Dompu',kabupaten:'Kab. Dompu',depth_m:50,aquifer_type:'bebas',water_level_m:28,water_level_pct:56,ph:7.0,conductivity_us:510,status_level:'waspada',color:'#f59e0b',measured_at:'2026-03-01',lon:118.445799,lat:-8.545350},
+    {id:4,well_code:'BMA-001',name:'Raba',kecamatan:'Raba',kabupaten:'Kab. Bima',depth_m:55,aquifer_type:'tertekan',water_level_m:11,water_level_pct:20,ph:7.4,conductivity_us:380,status_level:'normal',color:'#10b981',measured_at:'2026-03-01',lon:118.818073,lat:-8.457379},
   ];
-
-  return {
-    type: 'FeatureCollection',
-    metadata: { title:'Demo Mode — NTB Groundwater', total_wells: wells.length },
-    features: wells.map(w => ({
-      type: 'Feature',
-      geometry: { type:'Point', coordinates:[w.lon, w.lat] },
-      properties: w
-    }))
-  };
+  const geojson={type:'FeatureCollection',features:demo.map(w=>({type:'Feature',geometry:{type:'Point',coordinates:[w.lon,w.lat]},properties:w}))};
+  allFeatures=geojson.features;
+  addWellLayers(geojson);
+  updateStats(geojson.features);
+  renderList(geojson.features);
+  document.getElementById('loader').style.display='none';
 }
 
-
-// ── TAMBAH LAYER KE PETA ──────────────────────────────────
-function addWellLayers(geojson) {
-  if (map.getSource('wells')) {
-    map.getSource('wells').setData(geojson);
-    return;
-  }
-
-  map.addSource('wells', { type:'geojson', data: geojson });
-
-  // Lingkaran halo (glow)
-  map.addLayer({
-    id: 'wells-halo',
-    type: 'circle',
-    source: 'wells',
-    paint: {
-      'circle-radius': 14,
-      'circle-color': ['get','color'],
-      'circle-opacity': 0.15,
-      'circle-stroke-width': 0
-    }
-  });
-
-  // Titik utama
-  map.addLayer({
-    id: 'wells-circle',
-    type: 'circle',
-    source: 'wells',
-    paint: {
-      'circle-radius': ['interpolate',['linear'],['zoom'],7,5,12,9],
-      'circle-color': ['get','color'],
-      'circle-stroke-color': '#0f1117',
-      'circle-stroke-width': 1.5,
-      'circle-opacity': 0.95
-    }
-  });
-
-  // Klik sumur
-  map.on('click','wells-circle', e => {
-    const props = e.features[0].properties;
-    const coords = e.features[0].geometry.coordinates;
-    selectWell(props.id, coords);
-  });
-
-  map.on('mouseenter','wells-circle', () => { map.getCanvas().style.cursor = 'pointer'; });
-  map.on('mouseleave','wells-circle', () => { map.getCanvas().style.cursor = ''; });
+function addWellLayers(geojson){
+  if(map.getSource('wells')){map.getSource('wells').setData(geojson);return;}
+  map.addSource('wells',{type:'geojson',data:geojson});
+  map.addLayer({id:'wells-glow',type:'circle',source:'wells',paint:{'circle-radius':16,'circle-color':['get','color'],'circle-opacity':0.12,'circle-stroke-width':0}});
+  map.addLayer({id:'wells-circle',type:'circle',source:'wells',paint:{'circle-radius':['interpolate',['linear'],['zoom'],7,5,13,9],'circle-color':['get','color'],'circle-stroke-color':['get','color'],'circle-stroke-width':1.5,'circle-stroke-opacity':0.6,'circle-opacity':1}});
+  map.on('click','wells-circle',e=>{const p=e.features[0].properties;selectWell(p.id,[e.features[0].geometry.coordinates[0],e.features[0].geometry.coordinates[1]]);});
+  map.on('mouseenter','wells-circle',()=>{map.getCanvas().style.cursor='pointer';});
+  map.on('mouseleave','wells-circle',()=>{map.getCanvas().style.cursor='';});
 }
 
-
-// ── STATS HEADER ──────────────────────────────────────────
-function updateStats(features) {
-  const s = { normal:0, waspada:0, kritis:0, sangat_kritis:0 };
-  features.forEach(f => {
-    const sl = f.properties.status_level;
-    if (s[sl] !== undefined) s[sl]++;
-  });
-  document.getElementById('stat-total').textContent   = features.length;
-  document.getElementById('stat-normal').textContent  = s.normal;
-  document.getElementById('stat-waspada').textContent = s.waspada;
-  document.getElementById('stat-kritis').textContent  = s.kritis + s.sangat_kritis;
+function updateStats(features){
+  const s={normal:0,waspada:0,kritis:0,sangat_kritis:0};
+  features.forEach(f=>{const sl=f.properties.status_level;if(s[sl]!==undefined)s[sl]++;});
+  document.getElementById('s-total').textContent=features.length;
+  document.getElementById('s-normal').textContent=s.normal;
+  document.getElementById('s-waspada').textContent=s.waspada;
+  document.getElementById('s-kritis').textContent=s.kritis+s.sangat_kritis;
 }
 
-
-// ── DAFTAR SUMUR SIDEBAR ──────────────────────────────────
-function renderWellList(features) {
-  const el = document.getElementById('well-list');
-  if (!features.length) { el.innerHTML = '<div style="padding:16px;font-size:12px;color:#475569">Tidak ada sumur ditemukan</div>'; return; }
-  el.innerHTML = features.map(f => {
-    const p = f.properties;
-    const sc = `s-${p.status_level}`;
-    const slabel = { normal:'Normal', waspada:'Waspada', kritis:'Kritis', sangat_kritis:'Sangat Kritis', tidak_ada_data:'–' };
-    return `<div class="well-item${selectedId===p.id?' selected':''}" id="li-${p.id}" onclick="selectWell(${p.id}, ${JSON.stringify(f.geometry.coordinates)})">
-      <span class="well-status ${sc}">${slabel[p.status_level]||'–'}</span>
-      <div class="well-name">${p.name}</div>
-      <div class="well-meta">${p.kecamatan} · ${p.kabupaten}</div>
+function renderList(features){
+  const sl={normal:'Normal',waspada:'Waspada',kritis:'Kritis',sangat_kritis:'S.Kritis',tidak_ada_data:'–'};
+  document.getElementById('well-list').innerHTML=features.map(f=>{
+    const p=f.properties;
+    return `<div class="well-item${selId===p.id?' active':''}" id="li-${p.id}" onclick="selectWell(${p.id},[${f.geometry.coordinates}])">
+      <div class="well-dot" style="background:${p.color||'#4a5568'}"></div>
+      <div style="flex:1;min-width:0">
+        <div class="well-name">${p.name||p.well_code}</div>
+        <div class="well-kec">${p.kecamatan} · ${p.kabupaten}</div>
+      </div>
+      <span class="well-status s-${p.status_level}">${sl[p.status_level]||'–'}</span>
     </div>`;
   }).join('');
 }
 
-
-// ── FILTER ───────────────────────────────────────────────
-function applyFilter() {
-  const kab = document.getElementById('filter-kab').value.toLowerCase();
-  const st  = document.getElementById('filter-status').value;
-  const filtered = allFeatures.filter(f => {
-    const p = f.properties;
-    const okKab = !kab || p.kabupaten.toLowerCase().includes(kab);
-    const okSt  = !st  || p.status_level === st;
-    return okKab && okSt;
+function applyFilter(){
+  const kab=document.getElementById('f-kab').value.toLowerCase();
+  const st=document.getElementById('f-status').value;
+  const filtered=allFeatures.filter(f=>{
+    const p=f.properties;
+    return(!kab||p.kabupaten.toLowerCase().includes(kab))&&(!st||p.status_level===st);
   });
-
-  if (map.getSource('wells')) {
-    map.getSource('wells').setData({ type:'FeatureCollection', features: filtered });
-  }
-  renderWellList(filtered);
-  updateStats(filtered);
+  if(map.getSource('wells'))map.getSource('wells').setData({type:'FeatureCollection',features:filtered});
+  renderList(filtered);updateStats(filtered);
 }
 
-
-// ── SELECT SUMUR ──────────────────────────────────────────
-async function selectWell(id, coords) {
-  selectedId = id;
-  // highlight sidebar
-  document.querySelectorAll('.well-item').forEach(el => el.classList.remove('selected'));
-  const li = document.getElementById(`li-${id}`);
-  if (li) { li.classList.add('selected'); li.scrollIntoView({ block:'nearest' }); }
-
-  // fly ke sumur
-  map.flyTo({ center: coords, zoom: Math.max(map.getZoom(), 11), speed: 1.2 });
-
-  // buka panel
-  const panel = document.getElementById('detail-panel');
-  panel.classList.remove('hidden');
-
-  // isi dari cached data dulu
-  const feat = allFeatures.find(f => f.properties.id === id);
-  if (feat) fillDetailBasic(feat.properties);
-
-  // fetch time series
-  try {
-    const resp = await fetch(`${API}/wells/${id}/timeseries?months=12`);
-    if (resp.ok) {
-      const data = await resp.json();
-      fillDetailChart(data);
-    } else { fillDemoChart(feat?.properties); }
-  } catch { fillDemoChart(feat?.properties); }
+// SELECT WELL
+async function selectWell(id,coords){
+  selId=id;
+  document.querySelectorAll('.well-item').forEach(el=>el.classList.remove('active'));
+  const li=document.getElementById(`li-${id}`);
+  if(li){li.classList.add('active');li.scrollIntoView({block:'nearest'});}
+  document.getElementById('detail').classList.add('open');
+  map.flyTo({center:coords,zoom:Math.max(map.getZoom(),11),speed:1.4});
+  const feat=allFeatures.find(f=>f.properties.id===id);
+  if(feat)fillBasic(feat.properties);
+  try{
+    const r=await fetch(`${API}/wells/${id}/timeseries?months=12`);
+    if(r.ok){const d=await r.json();fillChart(d);}
+    else if(feat)fillDemoChart(feat.properties);
+  }catch{if(feat)fillDemoChart(feat.properties);}
 }
 
-function closeDetail() {
-  document.getElementById('detail-panel').classList.add('hidden');
-  selectedId = null;
-  document.querySelectorAll('.well-item').forEach(el => el.classList.remove('selected'));
+function closeDetail(){
+  document.getElementById('detail').classList.remove('open');
+  selId=null;
+  document.querySelectorAll('.well-item').forEach(el=>el.classList.remove('active'));
 }
 
-function fillDetailBasic(p) {
-  document.getElementById('det-name').textContent = p.name;
-  document.getElementById('det-loc').textContent  = `${p.kecamatan} · ${p.kabupaten}`;
-
-  const slabel = { normal:'Normal', waspada:'Waspada', kritis:'Kritis', sangat_kritis:'Sangat Kritis', tidak_ada_data:'Tidak Ada Data' };
-  const scolor = { normal:'#1D9E75', waspada:'#BA7517', kritis:'#E24B4A', sangat_kritis:'#F7C1C1', tidak_ada_data:'#475569' };
-  const sbg    = { normal:'#0a2a1e', waspada:'#2a1e0a', kritis:'#2a0a0a', sangat_kritis:'#1a0505', tidak_ada_data:'#1a1f2e' };
-
-  document.getElementById('det-status-badge').innerHTML = `
-    <div class="status-badge" style="background:${sbg[p.status_level]};color:${scolor[p.status_level]};border:1px solid ${scolor[p.status_level]}33">
-      ${slabel[p.status_level] || '–'}
-    </div>`;
-
-  const fmt = v => v !== null && v !== undefined ? v : '–';
-  const fmtDate = d => d ? new Date(d).toLocaleDateString('id-ID',{year:'numeric',month:'long'}) : '–';
-
-  document.getElementById('det-metrics').innerHTML = `
-    <div class="metric-row"><span class="metric-key">Kode sumur</span><span class="metric-val">${fmt(p.well_code)}</span></div>
-    <div class="metric-row"><span class="metric-key">Jenis akuifer</span><span class="metric-val">${fmt(p.aquifer_type)}</span></div>
-    <div class="metric-row"><span class="metric-key">Kedalaman sumur</span><span class="metric-val">${p.depth_m ? p.depth_m+' m' : '–'}</span></div>
-    <div class="metric-row"><span class="metric-key">Muka air saat ini</span><span class="metric-val" style="color:${scolor[p.status_level]}">${p.water_level_m ? p.water_level_m+' m' : '–'} ${p.water_level_pct ? '('+p.water_level_pct+'%)' : ''}</span></div>
-    <div class="metric-row"><span class="metric-key">pH</span><span class="metric-val">${fmt(p.ph)}</span></div>
-    <div class="metric-row"><span class="metric-key">Konduktivitas</span><span class="metric-val">${p.conductivity_us ? p.conductivity_us+' µS/cm' : '–'}</span></div>
-    <div class="metric-row"><span class="metric-key">Diukur</span><span class="metric-val">${fmtDate(p.measured_at)}</span></div>`;
-
-  document.getElementById('det-legal').innerHTML = `
-    Monitoring sesuai <b>PP No. 43 Tahun 2008</b> tentang Air Tanah Pasal 15.<br>
-    Parameter: SNI 6989.58:2008. Nilai muka air = kedalaman dari permukaan tanah.<br>
-    Status kritis bila muka air mencapai > 60% kedalaman sumur.`;
+function fillBasic(p){
+  document.getElementById('det-name').textContent=p.name||p.well_code;
+  document.getElementById('det-sub').textContent=`${p.kecamatan} · ${p.kabupaten}`;
+  const sc={normal:'#10b981',waspada:'#f59e0b',kritis:'#ef4444',sangat_kritis:'#7f1d1d',tidak_ada_data:'#4a5568'};
+  const sl={normal:'Normal',waspada:'Waspada',kritis:'Kritis',sangat_kritis:'Sangat Kritis',tidak_ada_data:'Tidak Ada Data'};
+  const c=sc[p.status_level]||'#4a5568';
+  document.getElementById('det-badge').innerHTML=`<div class="status-pill" style="background:${c}18;color:${c};border-color:${c}40;margin-bottom:10px">${sl[p.status_level]||'–'}</div>`;
+  const fmt=v=>v!==null&&v!==undefined?v:'–';
+  const fmtDate=d=>d?new Date(d).toLocaleDateString('id-ID',{year:'numeric',month:'long'}):'–';
+  document.getElementById('det-metrics').innerHTML=`
+    <div class="metric"><span class="metric-k">Kode sumur</span><span class="metric-v">${fmt(p.well_code)}</span></div>
+    <div class="metric"><span class="metric-k">Jenis akuifer</span><span class="metric-v">${fmt(p.aquifer_type)}</span></div>
+    <div class="metric"><span class="metric-k">Kedalaman</span><span class="metric-v">${p.depth_m?p.depth_m+' m':'–'}</span></div>
+    <div class="metric"><span class="metric-k">Muka air</span><span class="metric-v" style="color:${c}">${p.water_level_m?p.water_level_m+' m':' –'}${p.water_level_pct?' ('+p.water_level_pct+'%)':''}</span></div>
+    <div class="metric"><span class="metric-k">pH</span><span class="metric-v">${fmt(p.ph)}</span></div>
+    <div class="metric"><span class="metric-k">Konduktivitas</span><span class="metric-v">${p.conductivity_us?p.conductivity_us+' µS/cm':'–'}</span></div>
+    <div class="metric"><span class="metric-k">Diukur</span><span class="metric-v">${fmtDate(p.measured_at)}</span></div>`;
+  document.getElementById('det-legal').innerHTML=`PP No. 43 Tahun 2008 · SNI 6989.58:2008<br>Status: muka air / kedalaman sumur`;
 }
 
-function fillDetailChart(data) {
-  const labels = data.series.map(s => s.period);
-  const values = data.series.map(s => s.water_level_m);
-  renderChart(labels, values, data.well?.depth_m);
+function fillChart(data){
+  const labels=data.series.map(s=>s.period);
+  const values=data.series.map(s=>s.water_level_m);
+  renderDetChart(labels,values,data.well?.depth_m);
 }
 
-function fillDemoChart(props) {
-  if (!props) return;
-  // Generate demo time series
-  const now = new Date();
-  const labels = [], values = [];
-  for (let i = 11; i >= 0; i--) {
-    const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+function fillDemoChart(props){
+  const now=new Date();
+  const labels=[],values=[];
+  for(let i=11;i>=0;i--){
+    const d=new Date(now.getFullYear(),now.getMonth()-i,1);
     labels.push(`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`);
-    // Variasi musiman: lebih dalam (kering) di Jul-Okt
-    const month = d.getMonth();
-    const seasonal = 8 * Math.sin((month - 3) * 0.52);
-    values.push(+(((props.water_level_m || 15) + seasonal * 0.4 + (Math.random()-0.5) * 1.5)).toFixed(2));
+    const seasonal=8*Math.sin((d.getMonth()-3)*0.52);
+    values.push(+((props.water_level_m||15)+seasonal*0.4+(Math.random()-.5)*1.5).toFixed(2));
   }
-  renderChart(labels, values, props.depth_m);
+  renderDetChart(labels,values,props.depth_m);
 }
 
-
-// ── LOAD NDVI LAYER ──────────────────────────────────────
-async function loadNDVILayer() {
-  try {
-    const resp = await fetch('/api/ndvi/summary');
-    if (!resp.ok) return;
-    const data = await resp.json();
-
-    map.addSource('ndvi', { type: 'geojson', data: data });
-
-    // Ring luar — NDVI indicator
-    map.addLayer({
-      id: 'ndvi-ring',
-      type: 'circle',
-      source: 'ndvi',
-      paint: {
-        'circle-radius': 18,
-        'circle-color': ['get', 'color'],
-        'circle-opacity': 0.15,
-        'circle-stroke-color': ['get', 'color'],
-        'circle-stroke-width': 2,
-        'circle-stroke-opacity': 0.8
-      }
-    }, 'wells-halo');
-
-    // Label NDVI
-    map.addLayer({
-      id: 'ndvi-label',
-      type: 'symbol',
-      source: 'ndvi',
-      layout: {
-        'text-field': ['concat', 'NDVI\n', ['to-string', ['get', 'avg_ndvi']]],
-        'text-size': 9,
-        'text-offset': [0, 2.5],
-        'text-anchor': 'top'
-      },
-      paint: {
-        'text-color': ['get', 'color'],
-        'text-halo-color': '#0f1117',
-        'text-halo-width': 1
-      }
-    });
-
-    // Klik NDVI point
-    map.on('click', 'ndvi-ring', async e => {
-      const p = e.features[0].properties;
-      const coords = e.features[0].geometry.coordinates;
-
-      // Fetch time series
-      const ts = await fetch(`/api/ndvi/timeseries/${encodeURIComponent(p.location)}`);
-      const tsData = await ts.json();
-
-      // Tampilkan di detail panel
-      document.getElementById('detail-panel').classList.remove('hidden');
-      document.getElementById('det-name').textContent = `NDVI — ${p.location}`;
-      document.getElementById('det-loc').textContent = p.kabupaten;
-      document.getElementById('det-status-badge').innerHTML = `
-        <div class="status-badge" style="background:#0a2a1e;color:${p.color};border:1px solid ${p.color}33">
-          ${p.kondisi.toUpperCase()} — NDVI ${p.avg_ndvi}
-        </div>`;
-      document.getElementById('det-metrics').innerHTML = `
-        <div class="metric-row"><span class="metric-key">Rata-rata NDVI</span><span class="metric-val" style="color:${p.color}">${p.avg_ndvi}</span></div>
-        <div class="metric-row"><span class="metric-key">Min NDVI</span><span class="metric-val">${p.min_ndvi}</span></div>
-        <div class="metric-row"><span class="metric-key">Max NDVI</span><span class="metric-val">${p.max_ndvi}</span></div>
-        <div class="metric-row"><span class="metric-key">Data bulan</span><span class="metric-val">${p.n_months} bulan</span></div>
-        <div class="metric-row"><span class="metric-key">Sumber</span><span class="metric-val">Sentinel-2 10m</span></div>`;
-      document.getElementById('det-legal').innerHTML =
-        'NDVI = (B8-B4)/(B8+B4) · Rouse et al. (1974)<br>Cloud filter: &lt;30% · Period: 2023–2024<br>Source: COPERNICUS/S2_SR_HARMONIZED via GEE';
-
-      // Chart time series NDVI
-      if (tsData.series) {
-        const labels = tsData.series.map(s => s.period);
-        const values = tsData.series.map(s => s.ndvi);
-        renderChart(labels, values, null);
-      }
-
-      map.flyTo({ center: coords, zoom: Math.max(map.getZoom(), 10) });
-    });
-
-    map.on('mouseenter', 'ndvi-ring', () => { map.getCanvas().style.cursor = 'pointer'; });
-    map.on('mouseleave', 'ndvi-ring', () => { map.getCanvas().style.cursor = ''; });
-
-    console.log('NDVI layer loaded:', data.features.length, 'points');
-  } catch(e) {
-    console.log('NDVI layer error:', e);
-  }
-}
-async function loadAI() {
-  const el = document.getElementById("ai-text");
-  el.textContent = "Menganalisis data GRACE + Sentinel-2...";
-  try {
-    const r = await fetch("/api/ai/interpret");
-    const d = await r.json();
-    el.textContent = d.interpretation;
-  } catch(e) {
-    el.textContent = "Gagal memuat analisis. Coba lagi.";
-  }
-}
-window.addEventListener("load", () => setTimeout(loadAI, 3000));
-
-function renderChart(labels, values, depthM) {
-  if (chartInstance) { chartInstance.destroy(); chartInstance = null; }
-  const ctx = document.getElementById('det-chart').getContext('2d');
-
-  // Batas kritis (60% kedalaman)
-  const critLine = depthM ? +(depthM * 0.6).toFixed(1) : null;
-
-  chartInstance = new Chart(ctx, {
-    type: 'line',
-    data: {
-      labels,
-      datasets: [
-        {
-          label: 'Muka air (m)',
-          data: values,
-          borderColor: '#1D9E75',
-          backgroundColor: 'rgba(29,158,117,0.08)',
-          fill: true,
-          tension: 0.4,
-          pointRadius: 3,
-          pointBackgroundColor: '#1D9E75',
-          borderWidth: 1.5
-        },
-        ...(critLine ? [{
-          label: `Batas waspada (${critLine} m)`,
-          data: Array(labels.length).fill(critLine),
-          borderColor: '#BA7517',
-          borderDash: [4,3],
-          borderWidth: 1,
-          pointRadius: 0,
-          fill: false
-        }] : [])
-      ]
-    },
-    options: {
-      responsive: true,
-      maintainAspectRatio: false,
-      plugins: {
-        legend: { display: false },
-        tooltip: {
-          backgroundColor: '#1a1f2e',
-          titleColor: '#94a3b8',
-          bodyColor: '#e2e8f0',
-          borderColor: '#1e2433',
-          borderWidth: 1,
-          callbacks: {
-            label: ctx => `${ctx.dataset.label}: ${ctx.parsed.y} m`
-          }
-        }
-      },
-      scales: {
-        x: { ticks:{ color:'#475569', font:{size:10} }, grid:{ color:'#1e2433' } },
-        y: {
-          ticks:{ color:'#475569', font:{size:10}, callback: v => v+' m' },
-          grid:{ color:'#1e2433' },
-          reverse: true,
-          title:{ display:true, text:'Kedalaman (m)', color:'#334155', font:{size:10} }
-        }
+function renderDetChart(labels,values,depthM){
+  if(chartInst){chartInst.destroy();chartInst=null;}
+  const ctx=document.getElementById('det-chart').getContext('2d');
+  const critLine=depthM?+(depthM*0.6).toFixed(1):null;
+  chartInst=new Chart(ctx,{
+    type:'line',
+    data:{labels,datasets:[
+      {label:'Muka air (m)',data:values,borderColor:'#00d4ff',backgroundColor:'rgba(0,212,255,.06)',fill:true,tension:0.4,pointRadius:2,pointBackgroundColor:'#00d4ff',borderWidth:1.5},
+      ...(critLine?[{label:`Batas waspada`,data:Array(labels.length).fill(critLine),borderColor:'#f59e0b',borderDash:[4,3],borderWidth:1,pointRadius:0,fill:false}]:[])
+    ]},
+    options:{
+      responsive:true,maintainAspectRatio:false,
+      plugins:{legend:{display:false},tooltip:{backgroundColor:'#0d1421',titleColor:'#4a5568',bodyColor:'#e2e8f0',borderColor:'#1a2438',borderWidth:1}},
+      scales:{
+        x:{ticks:{color:'#4a5568',font:{size:9}},grid:{color:'#1a2438'}},
+        y:{ticks:{color:'#4a5568',font:{size:9},callback:v=>v+' m'},grid:{color:'#1a2438'},reverse:true}
       }
     }
   });
 }
-</script>
-<div id="grace-bottom" style="position:relative;left:0;right:0;height:200px;background:#0f1117;border-top:1px solid #1e2433;padding:12px 16px;z-index:1;"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px"><span style="font-size:12px;font-weight:500;color:#e2e8f0">NASA GRACE — Anomali Air Tanah NTB 2020-2025</span><div style="font-size:10px;display:flex;gap:10px"><span style="color:#1D9E75">■ Surplus</span><span style="color:#BA7517">■ Normal</span><span style="color:#E24B4A">■ Defisit</span></div></div><div style="height:140px"><canvas id="grace-chart"></canvas></div></div></body>
-</html>
-<script>
-window.addEventListener('load', () => setTimeout(loadGraceChart, 2000));
-async function loadGraceChart() {
-  try {
-    const r = await fetch('/api/grace/timeseries?start_year=2020&end_year=2025');
-    if (!r.ok) return;
-    const d = await r.json();
-    const ctx = document.getElementById('grace-chart').getContext('2d');
-    new Chart(ctx, {
-      type: 'bar',
-      data: {
-        labels: d.series.map(s => s.period),
-        datasets: [{
-          data: d.series.map(s => s.tws_cm),
-          backgroundColor: d.series.map(s => s.color + 'cc'),
-          borderColor: d.series.map(s => s.color),
-          borderWidth: 1,
-          borderRadius: 2
-        }]
+
+// NDVI LAYER
+async function loadNDVI(){
+  try{
+    const r=await fetch(`${API}/ndvi/summary`);
+    if(!r.ok)return;
+    const d=await r.json();
+    if(map.getSource('ndvi')){map.getSource('ndvi').setData(d);return;}
+    map.addSource('ndvi',{type:'geojson',data:d});
+    map.addLayer({id:'ndvi-ring',type:'circle',source:'ndvi',paint:{
+      'circle-radius':14,
+      'circle-color':'transparent',
+      'circle-stroke-color':['get','color'],
+      'circle-stroke-width':2,
+      'circle-stroke-opacity':0.7
+    }},'wells-glow');
+    map.on('click','ndvi-ring',async e=>{
+      const p=e.features[0].properties;
+      const coords=e.features[0].geometry.coordinates;
+      document.getElementById('detail').classList.add('open');
+      document.getElementById('det-name').textContent=`NDVI — ${p.location}`;
+      document.getElementById('det-sub').textContent=p.kabupaten;
+      const c=p.color||'#10b981';
+      document.getElementById('det-badge').innerHTML=`<div class="status-pill" style="background:${c}18;color:${c};border-color:${c}40;margin-bottom:10px">${p.kondisi?.toUpperCase()||'NDVI'} — ${p.avg_ndvi}</div>`;
+      document.getElementById('det-metrics').innerHTML=`
+        <div class="metric"><span class="metric-k">Rata-rata NDVI</span><span class="metric-v" style="color:${c}">${p.avg_ndvi}</span></div>
+        <div class="metric"><span class="metric-k">Min NDVI</span><span class="metric-v">${p.min_ndvi}</span></div>
+        <div class="metric"><span class="metric-k">Max NDVI</span><span class="metric-v">${p.max_ndvi}</span></div>
+        <div class="metric"><span class="metric-k">Data bulan</span><span class="metric-v">${p.n_months} bulan</span></div>
+        <div class="metric"><span class="metric-k">Resolusi</span><span class="metric-v">Sentinel-2 10m</span></div>`;
+      document.getElementById('det-legal').innerHTML=`NDVI = (B8-B4)/(B8+B4) · Rouse et al. (1974)<br>Cloud filter: &lt;30% · 2023–2024`;
+      try{
+        const ts=await fetch(`${API}/ndvi/timeseries/${encodeURIComponent(p.location)}`);
+        if(ts.ok){const td=await ts.json();if(td.series){renderDetChart(td.series.map(s=>s.period),td.series.map(s=>s.ndvi),null);}}
+      }catch{}
+      map.flyTo({center:coords,zoom:Math.max(map.getZoom(),10)});
+    });
+    map.on('mouseenter','ndvi-ring',()=>{map.getCanvas().style.cursor='pointer';});
+    map.on('mouseleave','ndvi-ring',()=>{map.getCanvas().style.cursor='';});
+  }catch(e){console.log('NDVI error:',e);}
+}
+
+// GRACE CHART
+async function loadGrace(){
+  try{
+    const r=await fetch(`${API}/grace/timeseries?start_year=2020&end_year=2025`);
+    if(!r.ok)return;
+    const d=await r.json();
+    const ctx=document.getElementById('grace-chart').getContext('2d');
+    new Chart(ctx,{
+      type:'bar',
+      data:{
+        labels:d.series.map(s=>s.period),
+        datasets:[{data:d.series.map(s=>s.tws_cm),backgroundColor:d.series.map(s=>s.color+'bb'),borderColor:d.series.map(s=>s.color),borderWidth:0,borderRadius:2}]
       },
-      options: {
-        responsive: true,
-        maintainAspectRatio: false,
-        plugins: {
-          legend: { display: false },
-          tooltip: {
-            backgroundColor: '#1a1f2e',
-            titleColor: '#94a3b8',
-            bodyColor: '#e2e8f0',
-            callbacks: {
-              label: c => `TWS: ${c.parsed.y.toFixed(2)} cm EWH`,
-              afterLabel: c => `Status: ${d.series[c.dataIndex].status}`
-            }
-          }
-        },
-        scales: {
-          x: { ticks: { color:'#475569', font:{size:9}, maxRotation:45 }, grid: { color:'#1e2433' } },
-          y: { ticks: { color:'#475569', font:{size:10}, callback: v => v+' cm' }, grid: { color:'#1e2433' } }
+      options:{
+        responsive:true,maintainAspectRatio:false,
+        plugins:{legend:{display:false},tooltip:{backgroundColor:'#0d1421',titleColor:'#4a5568',bodyColor:'#e2e8f0',borderColor:'#1a2438',borderWidth:1,callbacks:{label:c=>`TWS: ${c.parsed.y.toFixed(2)} cm EWH`}}},
+        scales:{
+          x:{ticks:{color:'#4a5568',font:{size:8},maxRotation:45},grid:{color:'#1a2438'}},
+          y:{ticks:{color:'#4a5568',font:{size:8},callback:v=>v+' cm'},grid:{color:'#1a2438'}}
         }
       }
     });
-  } catch(e) { console.log('GRACE error:', e); }
+  }catch(e){console.log('GRACE error:',e);}
 }
+
+// AI
+async function loadAI(){
+  const el=document.getElementById('ai-text');
+  el.textContent='Menganalisis data GRACE + Sentinel-2...';
+  try{
+    const r=await fetch(`${API}/ai/interpret`);
+    if(r.ok){const d=await r.json();el.textContent=d.interpretation;}
+    else el.textContent='Gagal memuat analisis.';
+  }catch{el.textContent='Gagal memuat analisis.';}
+}
+window.addEventListener('load',()=>setTimeout(loadAI,4000));
 </script>
+</body>
+</html>
