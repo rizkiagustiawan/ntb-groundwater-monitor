@@ -432,3 +432,100 @@ async def get_grace_timeseries(
         }
     finally:
         await conn.close()
+
+
+# ============================================================
+# ENDPOINT 7: NDVI Sentinel-2 per lokasi
+# ============================================================
+@app.get("/ndvi/summary")
+async def get_ndvi_summary():
+    """
+    Ringkasan kondisi vegetasi NTB dari Sentinel-2.
+    Referensi: Rouse et al. (1974) NDVI methodology.
+    """
+    conn = await get_db()
+    try:
+        rows = await conn.fetch("""
+            SELECT
+                location, kabupaten, lat, lon,
+                ROUND(AVG(ndvi)::numeric, 3) AS avg_ndvi,
+                ROUND(MIN(ndvi)::numeric, 3) AS min_ndvi,
+                ROUND(MAX(ndvi)::numeric, 3) AS max_ndvi,
+                CASE
+                    WHEN AVG(ndvi) >= 0.5 THEN 'lebat'
+                    WHEN AVG(ndvi) >= 0.3 THEN 'sedang'
+                    WHEN AVG(ndvi) >= 0.1 THEN 'jarang'
+                    ELSE 'kritis'
+                END AS kondisi,
+                COUNT(*) AS n_months
+            FROM sentinel2_ndvi
+            GROUP BY location, kabupaten, lat, lon
+            ORDER BY avg_ndvi DESC
+        """)
+
+        features = [{
+            "type": "Feature",
+            "geometry": {
+                "type": "Point",
+                "coordinates": [float(r["lon"]), float(r["lat"])]
+            },
+            "properties": {
+                "location":  r["location"],
+                "kabupaten": r["kabupaten"],
+                "avg_ndvi":  float(r["avg_ndvi"]),
+                "min_ndvi":  float(r["min_ndvi"]),
+                "max_ndvi":  float(r["max_ndvi"]),
+                "kondisi":   r["kondisi"],
+                "n_months":  r["n_months"],
+                "color": {
+                    "lebat":  "#1D9E75",
+                    "sedang": "#639922",
+                    "jarang": "#BA7517",
+                    "kritis": "#E24B4A"
+                }.get(r["kondisi"], "#888780")
+            }
+        } for r in rows]
+
+        return {
+            "type": "FeatureCollection",
+            "metadata": {
+                "title": "Sentinel-2 NDVI — Kondisi Vegetasi NTB",
+                "source": "Copernicus Sentinel-2 MSI (COPERNICUS/S2_SR_HARMONIZED)",
+                "method": "NDVI = (B8-B4)/(B8+B4), Rouse et al. (1974)",
+                "period": "2023-2024",
+                "cloud_filter": "< 30% cloud cover",
+                "resolution": "10 meter"
+            },
+            "features": features
+        }
+    finally:
+        await conn.close()
+
+
+@app.get("/ndvi/timeseries/{location}")
+async def get_ndvi_timeseries(location: str):
+    """Time series NDVI untuk satu lokasi."""
+    conn = await get_db()
+    try:
+        rows = await conn.fetch("""
+            SELECT period_date, ndvi, ndwi, vegetation_status
+            FROM sentinel2_ndvi
+            WHERE LOWER(location) = LOWER($1)
+            ORDER BY period_date
+        """, location)
+
+        if not rows:
+            raise HTTPException(status_code=404, detail=f"Lokasi '{location}' tidak ditemukan")
+
+        return {
+            "location": location,
+            "source": "Sentinel-2 MSI — Google Earth Engine",
+            "series": [{
+                "period": r["period_date"].strftime("%Y-%m"),
+                "ndvi": float(r["ndvi"]),
+                "ndwi": float(r["ndwi"]) if r["ndwi"] else None,
+                "status": r["vegetation_status"]
+            } for r in rows]
+        }
+    finally:
+        await conn.close()

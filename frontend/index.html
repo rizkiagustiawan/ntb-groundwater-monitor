@@ -245,7 +245,7 @@ map = new maplibregl.Map({
 map.addControl(new maplibregl.NavigationControl(), 'top-right');
 map.addControl(new maplibregl.ScaleControl({ unit: 'metric' }), 'bottom-right');
 
-map.on('load', () => { loadWells(); });
+map.on('load', () => { loadWells(); setTimeout(loadNDVILayer, 1500); });
 
 
 // ── LOAD DATA SUMUR ───────────────────────────────────────
@@ -495,6 +495,93 @@ function fillDemoChart(props) {
   renderChart(labels, values, props.depth_m);
 }
 
+
+// ── LOAD NDVI LAYER ──────────────────────────────────────
+async function loadNDVILayer() {
+  try {
+    const resp = await fetch('/api/ndvi/summary');
+    if (!resp.ok) return;
+    const data = await resp.json();
+
+    map.addSource('ndvi', { type: 'geojson', data: data });
+
+    // Ring luar — NDVI indicator
+    map.addLayer({
+      id: 'ndvi-ring',
+      type: 'circle',
+      source: 'ndvi',
+      paint: {
+        'circle-radius': 18,
+        'circle-color': ['get', 'color'],
+        'circle-opacity': 0.15,
+        'circle-stroke-color': ['get', 'color'],
+        'circle-stroke-width': 2,
+        'circle-stroke-opacity': 0.8
+      }
+    }, 'wells-halo');
+
+    // Label NDVI
+    map.addLayer({
+      id: 'ndvi-label',
+      type: 'symbol',
+      source: 'ndvi',
+      layout: {
+        'text-field': ['concat', 'NDVI\n', ['to-string', ['get', 'avg_ndvi']]],
+        'text-size': 9,
+        'text-offset': [0, 2.5],
+        'text-anchor': 'top'
+      },
+      paint: {
+        'text-color': ['get', 'color'],
+        'text-halo-color': '#0f1117',
+        'text-halo-width': 1
+      }
+    });
+
+    // Klik NDVI point
+    map.on('click', 'ndvi-ring', async e => {
+      const p = e.features[0].properties;
+      const coords = e.features[0].geometry.coordinates;
+
+      // Fetch time series
+      const ts = await fetch(`/api/ndvi/timeseries/${encodeURIComponent(p.location)}`);
+      const tsData = await ts.json();
+
+      // Tampilkan di detail panel
+      document.getElementById('detail-panel').classList.remove('hidden');
+      document.getElementById('det-name').textContent = `NDVI — ${p.location}`;
+      document.getElementById('det-loc').textContent = p.kabupaten;
+      document.getElementById('det-status-badge').innerHTML = `
+        <div class="status-badge" style="background:#0a2a1e;color:${p.color};border:1px solid ${p.color}33">
+          ${p.kondisi.toUpperCase()} — NDVI ${p.avg_ndvi}
+        </div>`;
+      document.getElementById('det-metrics').innerHTML = `
+        <div class="metric-row"><span class="metric-key">Rata-rata NDVI</span><span class="metric-val" style="color:${p.color}">${p.avg_ndvi}</span></div>
+        <div class="metric-row"><span class="metric-key">Min NDVI</span><span class="metric-val">${p.min_ndvi}</span></div>
+        <div class="metric-row"><span class="metric-key">Max NDVI</span><span class="metric-val">${p.max_ndvi}</span></div>
+        <div class="metric-row"><span class="metric-key">Data bulan</span><span class="metric-val">${p.n_months} bulan</span></div>
+        <div class="metric-row"><span class="metric-key">Sumber</span><span class="metric-val">Sentinel-2 10m</span></div>`;
+      document.getElementById('det-legal').innerHTML =
+        'NDVI = (B8-B4)/(B8+B4) · Rouse et al. (1974)<br>Cloud filter: &lt;30% · Period: 2023–2024<br>Source: COPERNICUS/S2_SR_HARMONIZED via GEE';
+
+      // Chart time series NDVI
+      if (tsData.series) {
+        const labels = tsData.series.map(s => s.period);
+        const values = tsData.series.map(s => s.ndvi);
+        renderChart(labels, values, null);
+      }
+
+      map.flyTo({ center: coords, zoom: Math.max(map.getZoom(), 10) });
+    });
+
+    map.on('mouseenter', 'ndvi-ring', () => { map.getCanvas().style.cursor = 'pointer'; });
+    map.on('mouseleave', 'ndvi-ring', () => { map.getCanvas().style.cursor = ''; });
+
+    console.log('NDVI layer loaded:', data.features.length, 'points');
+  } catch(e) {
+    console.log('NDVI layer error:', e);
+  }
+}
 function renderChart(labels, values, depthM) {
   if (chartInstance) { chartInstance.destroy(); chartInstance = null; }
   const ctx = document.getElementById('det-chart').getContext('2d');
