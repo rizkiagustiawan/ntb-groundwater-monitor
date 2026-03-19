@@ -1,6 +1,7 @@
 # Data satelit - terlalu besar untuk GitHub (200MB+)
 data/grace/*.nc
 data/sentinel/
+!data/grace/GRCTellus.JPL.200204_202512.GLO.RL06.3M.MSCNv04CRI.nc
 
 # Python
 __pycache__/

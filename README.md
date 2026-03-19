@@ -168,6 +168,24 @@ podaac-data-downloader \
 python scripts/grace_to_postgis.py
 ```
 
+### Bootstrap database from repo assets
+This repo now includes:
+- `data/grace/GRCTellus.JPL.200204_202512.GLO.RL06.3M.MSCNv04CRI.nc` for GRACE loading
+- `data/sentinel2/ntb_ndvi_timeseries.csv` as a committed Sentinel-2 NDVI fixture exported from the live dataset
+- `scripts/wells_esdm.sql` for the 280 ESDM wells layer
+
+To rebuild the core reference tables from the repository contents:
+```bash
+chmod +x scripts/bootstrap_data.sh
+docker compose up -d db api
+./scripts/bootstrap_data.sh
+```
+
+The bootstrap script will populate:
+- `grace_tws`
+- `sentinel2_ndvi`
+- `wells_esdm`
+
 ---
 
 ## API Reference

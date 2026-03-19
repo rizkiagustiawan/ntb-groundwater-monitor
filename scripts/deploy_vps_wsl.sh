@@ -19,19 +19,29 @@ test -d "$LOCAL_DIR"
 
 echo "==> Ensure remote directories"
 ssh -i "$KEY_PATH" "$HOST" "
-  mkdir -p '$REMOTE_DIR/backend' '$REMOTE_DIR/frontend' '$REMOTE_DIR/scripts'
+  mkdir -p '$REMOTE_DIR/backend' '$REMOTE_DIR/frontend' '$REMOTE_DIR/scripts' '$REMOTE_DIR/data/sentinel2' '$REMOTE_DIR/data/grace'
 "
 
 copy_file "backend/main.py"
 copy_file "frontend/index.html"
+copy_file "backend/init.sql"
+copy_file "backend/requirements.txt"
 copy_file "docker-compose.yml"
 copy_file "scripts/wells_esdm.sql"
+copy_file "scripts/bootstrap_data.sh"
+copy_file "scripts/grace_to_postgis.py"
+copy_file "scripts/load_ndvi_csv.py"
+copy_file "scripts/smoke_test_live.sh"
+copy_file "data/grace/GRCTellus.JPL.200204_202512.GLO.RL06.3M.MSCNv04CRI.nc"
+copy_file "data/grace/TELLUS_GRAC-GRFO_MASCON_CRI_GRID_RL06.3_V4.citation.txt"
+copy_file "data/sentinel2/ntb_ndvi_timeseries.csv"
 copy_file ".env.example"
 
 echo "==> Verify remote markers"
 ssh -i "$KEY_PATH" "$HOST" "
   set -e
   cd '$REMOTE_DIR'
+  chmod +x scripts/*.sh || true
   echo '--- frontend markers ---'
   grep -nE 'Anomali TWS Regional|Menganalisis TWS GRACE|loadDemo' frontend/index.html || true
   echo '--- backend markers ---'

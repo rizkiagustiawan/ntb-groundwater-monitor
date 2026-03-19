@@ -67,6 +67,29 @@ CREATE INDEX idx_grace_period  ON grace_tws(period_date);
 CREATE UNIQUE INDEX idx_grace_unique ON grace_tws(period_date, lat, lon);
 
 -- ============================================================
+-- TABEL: Sentinel-2 NDVI/NDWI per lokasi
+-- Sumber: Google Earth Engine, COPERNICUS/S2_SR_HARMONIZED
+-- ============================================================
+CREATE TABLE IF NOT EXISTS sentinel2_ndvi (
+    id                SERIAL PRIMARY KEY,
+    location          VARCHAR(100) NOT NULL,
+    kabupaten         VARCHAR(100) NOT NULL,
+    lat               NUMERIC(9,5) NOT NULL,
+    lon               NUMERIC(9,5) NOT NULL,
+    period_date       DATE NOT NULL,
+    ndvi              NUMERIC(8,4) NOT NULL,
+    ndwi              NUMERIC(8,4),
+    vegetation_status VARCHAR(30),
+    data_source       VARCHAR(50) DEFAULT 'sentinel2_csv',
+    geom              GEOMETRY(Point, 4326),
+    created_at        TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_sentinel2_ndvi_geom ON sentinel2_ndvi USING GIST(geom);
+CREATE INDEX IF NOT EXISTS idx_sentinel2_ndvi_period ON sentinel2_ndvi(period_date);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_sentinel2_ndvi_unique ON sentinel2_ndvi(location, period_date);
+
+-- ============================================================
 -- TABEL: Cekungan Air Tanah (CAT)
 -- Referensi: Perpres No. 33 Tahun 2018 - Daftar CAT Indonesia
 -- ============================================================
