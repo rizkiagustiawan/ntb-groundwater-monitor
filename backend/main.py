@@ -34,6 +34,78 @@ async def get_db():
     return await asyncpg.connect(DATABASE_URL)
 
 
+def classify_ndvi(ndvi_value: float, title_case: bool = False) -> str:
+    if ndvi_value >= 0.5:
+        return "Vegetasi Lebat" if title_case else "lebat"
+    if ndvi_value >= 0.3:
+        return "Vegetasi Sedang" if title_case else "sedang"
+    if ndvi_value >= 0.1:
+        return "Vegetasi Jarang" if title_case else "jarang"
+    return "Lahan Kritis" if title_case else "kritis"
+
+
+def ndvi_color(kondisi: str) -> str:
+    return {
+        "lebat": "#1D9E75",
+        "sedang": "#639922",
+        "jarang": "#BA7517",
+        "kritis": "#E24B4A"
+    }.get(kondisi, "#888780")
+
+
+def format_period_label(period_value: Optional[date]) -> Optional[str]:
+    if not period_value:
+        return None
+    return period_value.strftime("%Y-%m")
+
+
+async def get_ndvi_period_range(conn):
+    return await conn.fetchrow("""
+        SELECT
+            MIN(period_date) AS min_period,
+            MAX(period_date) AS max_period
+        FROM sentinel2_ndvi
+    """)
+
+
+async def get_latest_ndvi_rows(conn, ascending: bool = False, limit: Optional[int] = None):
+    order = "ASC" if ascending else "DESC"
+    limit_clause = f"LIMIT {int(limit)}" if limit else ""
+    return await conn.fetch(f"""
+        WITH ranked AS (
+            SELECT
+                location,
+                kabupaten,
+                lat,
+                lon,
+                period_date,
+                ndvi,
+                ndwi,
+                vegetation_status,
+                ROW_NUMBER() OVER (PARTITION BY location ORDER BY period_date DESC) AS rn,
+                ROUND(MIN(ndvi) OVER (PARTITION BY location)::numeric, 3) AS min_ndvi,
+                ROUND(MAX(ndvi) OVER (PARTITION BY location)::numeric, 3) AS max_ndvi,
+                COUNT(*) OVER (PARTITION BY location) AS n_months
+            FROM sentinel2_ndvi
+        )
+        SELECT
+            location,
+            kabupaten,
+            lat,
+            lon,
+            ROUND(ndvi::numeric, 3) AS latest_ndvi,
+            min_ndvi,
+            max_ndvi,
+            n_months,
+            period_date AS latest_period,
+            vegetation_status
+        FROM ranked
+        WHERE rn = 1
+        ORDER BY latest_ndvi {order}, location
+        {limit_clause}
+    """)
+
+
 # ============================================================
 # ROOT
 # ============================================================
@@ -269,11 +341,12 @@ async def get_grace_tws(
         return {
             "type": "FeatureCollection",
             "metadata": {
-                "title": "GRACE/GRACE-FO Terrestrial Water Storage Anomaly — NTB",
+                "title": "GRACE/GRACE-FO Terrestrial Water Storage Anomaly - NTB",
                 "data_source": "NASA GRACE RL06 Mascon Solutions",
                 "unit": "cm equivalent water height (EWH)",
                 "reference": "Watkins et al. (2015), doi:10.1002/2014JB011547",
-                "interpretation": "Nilai negatif = defisit air, nilai positif = surplus air dibanding rata-rata 2004-2009",
+                "interpretation": "Nilai negatif = defisit simpanan air daratan regional; nilai positif = surplus terhadap baseline 2004-2009.",
+                "usage_note": "GRACE TWS adalah indikator regional perubahan simpanan air daratan, bukan pembacaan langsung muka air sumur.",
                 "total_records": len(features)
             },
             "features": features
@@ -413,13 +486,14 @@ async def get_grace_timeseries(
 
         return {
             "metadata": {
-                "title":      "GRACE/GRACE-FO TWS Anomaly — NTB",
+                "title":      "GRACE/GRACE-FO TWS Anomaly - NTB",
                 "unit":       "cm equivalent water height (EWH)",
                 "baseline":   "2004-2009 mean",
                 "source":     "NASA GRACE RL06.3 Mascon",
                 "reference":  "Watkins et al. (2015)",
                 "coverage":   "Nusa Tenggara Barat (4x8 grid, 0.5deg resolution)",
-                "period":     f"{start_year}–{end_year}"
+                "period":     f"{start_year}-{end_year}",
+                "usage_note": "Gunakan sebagai indikator regional simpanan air daratan, bukan pengganti muka air sumur lokal."
             },
             "statistics": {
                 "mean_tws":       round(sum(vals)/len(vals), 2) if vals else None,
@@ -445,23 +519,8 @@ async def get_ndvi_summary():
     """
     conn = await get_db()
     try:
-        rows = await conn.fetch("""
-            SELECT
-                location, kabupaten, lat, lon,
-                ROUND(AVG(ndvi)::numeric, 3) AS avg_ndvi,
-                ROUND(MIN(ndvi)::numeric, 3) AS min_ndvi,
-                ROUND(MAX(ndvi)::numeric, 3) AS max_ndvi,
-                CASE
-                    WHEN AVG(ndvi) >= 0.5 THEN 'lebat'
-                    WHEN AVG(ndvi) >= 0.3 THEN 'sedang'
-                    WHEN AVG(ndvi) >= 0.1 THEN 'jarang'
-                    ELSE 'kritis'
-                END AS kondisi,
-                COUNT(*) AS n_months
-            FROM sentinel2_ndvi
-            GROUP BY location, kabupaten, lat, lon
-            ORDER BY avg_ndvi DESC
-        """)
+        rows = await get_latest_ndvi_rows(conn)
+        period_range = await get_ndvi_period_range(conn)
 
         features = [{
             "type": "Feature",
@@ -472,29 +531,27 @@ async def get_ndvi_summary():
             "properties": {
                 "location":  r["location"],
                 "kabupaten": r["kabupaten"],
-                "avg_ndvi":  float(r["avg_ndvi"]),
+                "avg_ndvi":  float(r["latest_ndvi"]),
                 "min_ndvi":  float(r["min_ndvi"]),
                 "max_ndvi":  float(r["max_ndvi"]),
-                "kondisi":   r["kondisi"],
+                "kondisi":   classify_ndvi(float(r["latest_ndvi"])),
                 "n_months":  r["n_months"],
-                "color": {
-                    "lebat":  "#1D9E75",
-                    "sedang": "#639922",
-                    "jarang": "#BA7517",
-                    "kritis": "#E24B4A"
-                }.get(r["kondisi"], "#888780")
+                "latest_period": format_period_label(r["latest_period"]),
+                "color": ndvi_color(classify_ndvi(float(r["latest_ndvi"])))
             }
         } for r in rows]
 
         return {
             "type": "FeatureCollection",
             "metadata": {
-                "title": "Sentinel-2 NDVI — Kondisi Vegetasi NTB",
+                "title": "Sentinel-2 NDVI - Snapshot Vegetasi Terbaru NTB",
                 "source": "Copernicus Sentinel-2 MSI (COPERNICUS/S2_SR_HARMONIZED)",
                 "method": "NDVI = (B8-B4)/(B8+B4), Rouse et al. (1974)",
-                "period": "2023-2024",
+                "period": f"{format_period_label(period_range['min_period'])} s.d. {format_period_label(period_range['max_period'])}" if period_range and period_range["min_period"] and period_range["max_period"] else None,
+                "latest_snapshot": format_period_label(period_range["max_period"]) if period_range else None,
                 "cloud_filter": "< 30% cloud cover",
-                "resolution": "10 meter"
+                "resolution": "10 meter",
+                "summary_basis": "Nilai per lokasi memakai observasi terbaru; min/max adalah rentang historis pada seri waktu yang tersedia."
             },
             "features": features
         }
@@ -555,21 +612,8 @@ async def ai_interpret_ntb():
             LIMIT 6
         """)
 
-        # Ambil rata-rata NDVI per lokasi
-        ndvi_rows = await conn.fetch("""
-            SELECT location, kabupaten,
-                   ROUND(AVG(ndvi)::numeric, 3) AS avg_ndvi,
-                   CASE
-                       WHEN AVG(ndvi) >= 0.5 THEN 'Vegetasi Lebat'
-                       WHEN AVG(ndvi) >= 0.3 THEN 'Vegetasi Sedang'
-                       WHEN AVG(ndvi) >= 0.1 THEN 'Vegetasi Jarang'
-                       ELSE 'Lahan Kritis'
-                   END AS kondisi
-            FROM sentinel2_ndvi
-            GROUP BY location, kabupaten
-            ORDER BY avg_ndvi ASC
-            LIMIT 5
-        """)
+        # Ambil snapshot NDVI terbaru per lokasi
+        ndvi_rows = await get_latest_ndvi_rows(conn, ascending=True, limit=5)
 
         # Ambil ringkasan sumur
         well_rows = await conn.fetch("""
@@ -588,7 +632,7 @@ async def ai_interpret_ntb():
         ])
 
         ndvi_summary = "\n".join([
-            f"  {r['location']} ({r['kabupaten']}): NDVI {r['avg_ndvi']} — {r['kondisi']}"
+            f"  {r['location']} ({r['kabupaten']}): NDVI terbaru {float(r['latest_ndvi']):.3f} pada {format_period_label(r['latest_period'])} - {classify_ndvi(float(r['latest_ndvi']), title_case=True)}"
             for r in ndvi_rows
         ])
 
@@ -601,11 +645,11 @@ async def ai_interpret_ntb():
 
 Berikut adalah data monitoring air tanah Nusa Tenggara Barat (NTB) terkini:
 
-DATA NASA GRACE — Anomali Terrestrial Water Storage (6 bulan terakhir):
+DATA NASA GRACE - Anomali Terrestrial Water Storage regional (6 bulan terakhir):
 {grace_summary}
-(Nilai negatif = defisit air tanah dibanding baseline 2004-2009)
+(Nilai negatif = defisit simpanan air daratan regional dibanding baseline 2004-2009. Ini bukan pembacaan langsung muka air sumur.)
 
-DATA SENTINEL-2 NDVI — Kondisi Vegetasi (5 lokasi paling kritis):
+DATA SENTINEL-2 NDVI - Snapshot vegetasi terbaru (5 lokasi paling kritis):
 {ndvi_summary}
 (NDVI < 0.2 = vegetasi sangat jarang/lahan kritis)
 
@@ -613,8 +657,8 @@ STATUS SUMUR PANTAU:
 {well_summary}
 
 Berikan interpretasi komprehensif dalam Bahasa Indonesia (maksimal 200 kata) yang mencakup:
-1. Kondisi air tanah NTB saat ini berdasarkan data GRACE
-2. Hubungan antara kondisi vegetasi dan ketersediaan air tanah
+1. Kondisi simpanan air daratan regional NTB saat ini berdasarkan GRACE
+2. Hubungan indikatif antara kondisi vegetasi dan potensi tekanan sumber daya air
 3. Kabupaten/area yang paling memerlukan perhatian segera
 4. Rekomendasi tindakan prioritas untuk Dinas ESDM NTB
 
@@ -653,8 +697,9 @@ Referensikan PP No. 43 Tahun 2008 tentang Pengelolaan Air Tanah jika relevan."""
                 ],
                 "ndvi_critical": [
                     {"location": r['location'],
-                     "ndvi": float(r['avg_ndvi']),
-                     "kondisi": r['kondisi']}
+                     "ndvi": float(r['latest_ndvi']),
+                     "kondisi": classify_ndvi(float(r['latest_ndvi']), title_case=True),
+                     "latest_period": format_period_label(r['latest_period'])}
                     for r in ndvi_rows
                 ]
             }
@@ -687,15 +732,7 @@ async def generate_pdf_report():
             FROM grace_tws GROUP BY period_date
             ORDER BY period_date DESC LIMIT 6
         """)
-        ndvi_rows = await conn.fetch("""
-            SELECT location, kabupaten,
-                   ROUND(AVG(ndvi)::numeric, 3) AS avg_ndvi,
-                   CASE WHEN AVG(ndvi) >= 0.5 THEN 'Vegetasi Lebat'
-                        WHEN AVG(ndvi) >= 0.3 THEN 'Vegetasi Sedang'
-                        WHEN AVG(ndvi) >= 0.1 THEN 'Vegetasi Jarang'
-                        ELSE 'Lahan Kritis' END AS kondisi
-            FROM sentinel2_ndvi GROUP BY location, kabupaten ORDER BY avg_ndvi ASC
-        """)
+        ndvi_rows = await get_latest_ndvi_rows(conn, ascending=True)
         kab_rows = await conn.fetch("""
             SELECT kabupaten, COUNT(*) AS total,
                    COUNT(*) FILTER (WHERE status_level='normal') AS normal,
@@ -709,9 +746,10 @@ async def generate_pdf_report():
         ai_resp = kimi.chat.completions.create(
             model="moonshot-v1-8k",
             messages=[{"role":"user","content":
-                f"Buat ringkasan eksekutif kondisi air tanah NTB dalam 2 paragraf singkat. "
-                f"Data: TWS terkini {float(grace_rows[0]['avg_tws'])} cm EWH, "
+                f"Buat ringkasan eksekutif kondisi sumber daya air NTB dalam 2 paragraf singkat. "
+                f"Data: TWS regional terkini {float(grace_rows[0]['avg_tws'])} cm EWH, "
                 f"{sum(r['kritis'] or 0 for r in kab_rows)} sumur kritis. "
+                f"Tegaskan bahwa GRACE adalah indikator regional, bukan pembacaan langsung muka air sumur. "
                 f"Bahasa formal untuk laporan pemerintah. Referensi PP 43/2008."}],
             temperature=0.3
         )
@@ -767,7 +805,7 @@ async def generate_pdf_report():
         total_w   = sum(r['total'] for r in kab_rows)
         total_k   = sum(r['kritis'] or 0 for r in kab_rows)
         latest_tws = float(grace_rows[0]['avg_tws'])
-        ndvi_k    = sum(1 for r in ndvi_rows if float(r['avg_ndvi']) < 0.1)
+        ndvi_k    = sum(1 for r in ndvi_rows if float(r['latest_ndvi']) < 0.1)
 
         stats_data = [
             [Paragraph(f'<b>{total_w}</b><br/>Total Sumur', body_style),
@@ -796,7 +834,7 @@ async def generate_pdf_report():
         story.append(Spacer(1, 0.3*cm))
 
         # GRACE table
-        story.append(Paragraph('Data NASA GRACE — Anomali Air Tanah 6 Bulan Terakhir', h2_style))
+        story.append(Paragraph('Data NASA GRACE - Anomali TWS Regional 6 Bulan Terakhir', h2_style))
         grace_table_data = [['Periode', 'Anomali TWS (cm EWH)', 'Status']]
         for r in grace_rows:
             tws = float(r['avg_tws'])
@@ -850,15 +888,16 @@ async def generate_pdf_report():
         story.append(Spacer(1, 0.3*cm))
 
         # NDVI table
-        story.append(Paragraph('Kondisi Vegetasi — Sentinel-2 NDVI', h2_style))
-        ndvi_table_data = [['Lokasi', 'Kabupaten', 'Rata-rata NDVI', 'Kondisi']]
+        story.append(Paragraph('Kondisi Vegetasi - Snapshot NDVI Sentinel-2 Terbaru', h2_style))
+        ndvi_table_data = [['Lokasi', 'Kabupaten', 'NDVI Terbaru', 'Kondisi']]
         for r in ndvi_rows:
-            ndvi = float(r['avg_ndvi'])
+            ndvi = float(r['latest_ndvi'])
+            kondisi = classify_ndvi(ndvi, title_case=True)
             nc = '#1D9E75' if ndvi >= 0.5 else '#BA7517' if ndvi >= 0.2 else '#E24B4A'
             ndvi_table_data.append([
                 r['location'], r['kabupaten'],
                 Paragraph(f'<font color="{nc}"><b>{ndvi:.3f}</b></font>', body_style),
-                r['kondisi']
+                kondisi
             ])
         nt = Table(ndvi_table_data, colWidths=[4.5*cm,5*cm,3.5*cm,4*cm])
         nt.setStyle(TableStyle([
@@ -879,7 +918,7 @@ async def generate_pdf_report():
         legal = ('Dasar Hukum: PP No. 43 Tahun 2008 · Perpres No. 33 Tahun 2018 · '
                  'PerMenLHK P.68/2016 · SNI 6989.58:2008 | '
                  'Metodologi: NDVI = (B8-B4)/(B8+B4) Rouse et al. (1974) · '
-                 'TWS = NASA GRACE RL06.3 Mascon Watkins et al. (2015) | '
+                 'TWS = NASA GRACE RL06.3 Mascon Watkins et al. (2015), indikator regional simpanan air daratan | '
                  'Disclaimer: Laporan ini dihasilkan otomatis. Keputusan kebijakan harus dikonfirmasi pengukuran lapangan.')
         story.append(Paragraph(legal, small_style))
 

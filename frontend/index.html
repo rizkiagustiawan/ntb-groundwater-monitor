@@ -94,6 +94,7 @@ select:focus{border-color:var(--accent)}
 .well-scroll{flex:1;overflow-y:auto}
 .well-scroll::-webkit-scrollbar{width:3px}
 .well-scroll::-webkit-scrollbar-thumb{background:var(--border2);border-radius:2px}
+.well-empty{padding:10px 14px;font-size:10px;line-height:1.6;color:var(--muted)}
 .well-item{padding:8px 14px;border-bottom:1px solid var(--border);cursor:pointer;transition:background .1s;display:flex;align-items:center;gap:8px}
 .well-item:hover{background:var(--surface2)}
 .well-item.active{background:rgba(0,212,255,.06);border-left:2px solid var(--accent)}
@@ -248,8 +249,8 @@ select:focus{border-color:var(--accent)}
     <div class="det-body">
       <div id="det-badge"></div>
       <div id="det-metrics"></div>
-      <div class="chart-label">Muka Air Tanah 12 Bulan (m)</div>
-      <div class="chart-wrap"><canvas id="det-chart"></canvas></div>
+      <div class="chart-label" id="det-chart-label">Muka Air Tanah 12 Bulan (m)</div>
+      <div class="chart-wrap" id="det-chart-wrap"><canvas id="det-chart"></canvas></div>
       <div class="legal-note" id="det-legal"></div>
     </div>
   </div>
@@ -259,7 +260,7 @@ select:focus{border-color:var(--accent)}
 <!-- GRACE STRIP -->
 <div class="grace-strip">
   <div class="grace-header">
-    <span class="grace-title">NASA GRACE/GRACE-FO — Anomali Air Tanah NTB 2020–2025</span>
+    <span class="grace-title">NASA GRACE/GRACE-FO - Anomali TWS Regional NTB 2020-2025</span>
     <div class="grace-legend">
       <span><span style="display:inline-block;width:8px;height:8px;background:#10b981;border-radius:2px"></span>Surplus</span>
       <span><span style="display:inline-block;width:8px;height:8px;background:#f59e0b;border-radius:2px"></span>Normal</span>
@@ -272,6 +273,33 @@ select:focus{border-color:var(--accent)}
 <script>
 const API = '/api';
 let map, allFeatures=[], chartInst=null, selId=null;
+
+function setChartVisibility(label, visible=true){
+  document.getElementById('det-chart-label').textContent=label;
+  document.getElementById('det-chart-wrap').style.display=visible?'block':'none';
+}
+
+function clearDetailChart(){
+  if(chartInst){chartInst.destroy();chartInst=null;}
+  const ctx=document.getElementById('det-chart').getContext('2d');
+  ctx.clearRect(0,0,ctx.canvas.width,ctx.canvas.height);
+}
+
+function showNoTimeSeries(label='Data historis tidak tersedia'){
+  setChartVisibility(label,false);
+  clearDetailChart();
+}
+
+function formatMonthLabel(period){
+  if(!period)return '–';
+  const [y,m]=period.split('-').map(Number);
+  if(!y||!m)return period;
+  return new Date(y,m-1,1).toLocaleDateString('id-ID',{year:'numeric',month:'long'});
+}
+
+function renderWellListMessage(message){
+  document.getElementById('well-list').innerHTML=`<div class="well-empty">${message}</div>`;
+}
 
 // MAP INIT
 map = new maplibregl.Map({
@@ -299,22 +327,13 @@ async function loadWells(){
     updateStats(d.features);
     renderList(d.features);
     document.getElementById('loader').style.display='none';
-  }catch{loadDemo();}
-}
-
-function loadDemo(){
-  const demo=[
-    {id:1,well_code:'SMB-001',name:'Sumbawa Kota',kecamatan:'Sumbawa',kabupaten:'Kab. Sumbawa',depth_m:45,aquifer_type:'bebas',water_level_m:20.97,water_level_pct:46.6,ph:6.94,conductivity_us:560,status_level:'waspada',color:'#f59e0b',measured_at:'2026-03-01',lon:117.418755,lat:-8.500053},
-    {id:2,well_code:'KSB-002',name:'Sekongkang',kecamatan:'Sekongkang',kabupaten:'Kab. Sumbawa Barat',depth_m:65,aquifer_type:'tertekan',water_level_m:45.5,water_level_pct:70,ph:6.5,conductivity_us:890,status_level:'kritis',color:'#ef4444',measured_at:'2026-03-01',lon:116.812017,lat:-8.969238},
-    {id:3,well_code:'DMP-001',name:'Dompu Kota',kecamatan:'Dompu',kabupaten:'Kab. Dompu',depth_m:50,aquifer_type:'bebas',water_level_m:28,water_level_pct:56,ph:7.0,conductivity_us:510,status_level:'waspada',color:'#f59e0b',measured_at:'2026-03-01',lon:118.445799,lat:-8.545350},
-    {id:4,well_code:'BMA-001',name:'Raba',kecamatan:'Raba',kabupaten:'Kab. Bima',depth_m:55,aquifer_type:'tertekan',water_level_m:11,water_level_pct:20,ph:7.4,conductivity_us:380,status_level:'normal',color:'#10b981',measured_at:'2026-03-01',lon:118.818073,lat:-8.457379},
-  ];
-  const geojson={type:'FeatureCollection',features:demo.map(w=>({type:'Feature',geometry:{type:'Point',coordinates:[w.lon,w.lat]},properties:w}))};
-  allFeatures=geojson.features;
-  addWellLayers(geojson);
-  updateStats(geojson.features);
-  renderList(geojson.features);
-  document.getElementById('loader').style.display='none';
+  }catch{
+    allFeatures=[];
+    updateStats([]);
+    renderWellListMessage('Data sumur pantau tidak berhasil dimuat dari API. Layer satelit dan sumur ESDM tetap bisa dilihat, tetapi statistik sumur pantau tidak tersedia.');
+    document.querySelector('#loader .loader-text').textContent='Gagal memuat sumur pantau dari API.';
+    document.getElementById('loader').style.display='none';
+  }
 }
 
 function addWellLayers(geojson){
@@ -341,6 +360,10 @@ function updateStats(features){
 }
 
 function renderList(features){
+  if(!features.length){
+    renderWellListMessage('Tidak ada sumur pantau yang cocok dengan filter aktif.');
+    return;
+  }
   const sl={normal:'Normal',waspada:'Waspada',kritis:'Kritis',sangat_kritis:'S.Kritis',tidak_ada_data:'–'};
   document.getElementById('well-list').innerHTML=features.map(f=>{
     const p=f.properties;
@@ -366,7 +389,8 @@ function applyFilter(){
     return(!kab||p.kabupaten.toLowerCase().includes(kab))&&(!st||p.status_level===st);
   });
   if(map.getSource('wells'))map.getSource('wells').setData({type:'FeatureCollection',features:filtered});
-  renderList(filtered);updateStats(filtered);
+  renderList(filtered);
+  updateStats(filtered);
 }
 
 // SELECT WELL
@@ -378,12 +402,19 @@ async function selectWell(id,coords){
   document.getElementById('detail').classList.add('open');
   map.flyTo({center:coords,zoom:Math.max(map.getZoom(),11),speed:1.4});
   const feat=allFeatures.find(f=>f.properties.id===id);
+  setChartVisibility('Muka Air Tanah 12 Bulan (m)',true);
   if(feat)fillBasic(feat.properties);
   try{
     const r=await fetch(`${API}/wells/${id}/timeseries?months=12`);
-    if(r.ok){const d=await r.json();fillChart(d);}
-    else if(feat)fillDemoChart(feat.properties);
-  }catch{if(feat)fillDemoChart(feat.properties);}
+    if(r.ok){
+      const d=await r.json();
+      fillChart(d);
+    }else{
+      showNoTimeSeries('Data historis sumur tidak tersedia');
+    }
+  }catch{
+    showNoTimeSeries('Data historis sumur tidak tersedia');
+  }
 }
 
 function closeDetail(){
@@ -413,39 +444,40 @@ function fillBasic(p){
 }
 
 function fillChart(data){
+  if(!data.series || !data.series.length){
+    showNoTimeSeries('Data historis sumur tidak tersedia');
+    return;
+  }
   const labels=data.series.map(s=>s.period);
   const values=data.series.map(s=>s.water_level_m);
-  renderDetChart(labels,values,data.well?.depth_m);
+  renderDetChart(labels,values,{
+    seriesLabel:'Muka air (m)',
+    color:'#00d4ff',
+    backgroundColor:'rgba(0,212,255,.06)',
+    thresholdValue:data.well?.depth_m?+(data.well.depth_m*0.6).toFixed(1):null,
+    thresholdLabel:'Batas waspada',
+    ySuffix:' m',
+    reverse:true
+  });
 }
 
-function fillDemoChart(props){
-  const now=new Date();
-  const labels=[],values=[];
-  for(let i=11;i>=0;i--){
-    const d=new Date(now.getFullYear(),now.getMonth()-i,1);
-    labels.push(`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`);
-    const seasonal=8*Math.sin((d.getMonth()-3)*0.52);
-    values.push(+((props.water_level_m||15)+seasonal*0.4+(Math.random()-.5)*1.5).toFixed(2));
-  }
-  renderDetChart(labels,values,props.depth_m);
-}
-
-function renderDetChart(labels,values,depthM){
+function renderDetChart(labels,values,opts={}){
   if(chartInst){chartInst.destroy();chartInst=null;}
+  setChartVisibility(opts.chartLabel||'Deret Waktu',true);
   const ctx=document.getElementById('det-chart').getContext('2d');
-  const critLine=depthM?+(depthM*0.6).toFixed(1):null;
+  const critLine=opts.thresholdValue??null;
   chartInst=new Chart(ctx,{
     type:'line',
     data:{labels,datasets:[
-      {label:'Muka air (m)',data:values,borderColor:'#00d4ff',backgroundColor:'rgba(0,212,255,.06)',fill:true,tension:0.4,pointRadius:2,pointBackgroundColor:'#00d4ff',borderWidth:1.5},
-      ...(critLine?[{label:`Batas waspada`,data:Array(labels.length).fill(critLine),borderColor:'#f59e0b',borderDash:[4,3],borderWidth:1,pointRadius:0,fill:false}]:[])
+      {label:opts.seriesLabel||'Nilai',data:values,borderColor:opts.color||'#00d4ff',backgroundColor:opts.backgroundColor||'rgba(0,212,255,.06)',fill:true,tension:0.4,pointRadius:2,pointBackgroundColor:opts.color||'#00d4ff',borderWidth:1.5},
+      ...(critLine!==null?[{label:opts.thresholdLabel||'Batas',data:Array(labels.length).fill(critLine),borderColor:'#f59e0b',borderDash:[4,3],borderWidth:1,pointRadius:0,fill:false}]:[])
     ]},
     options:{
       responsive:true,maintainAspectRatio:false,
       plugins:{legend:{display:false},tooltip:{backgroundColor:'#0d1421',titleColor:'#4a5568',bodyColor:'#e2e8f0',borderColor:'#1a2438',borderWidth:1}},
       scales:{
         x:{ticks:{color:'#4a5568',font:{size:9}},grid:{color:'#1a2438'}},
-        y:{ticks:{color:'#4a5568',font:{size:9},callback:v=>v+' m'},grid:{color:'#1a2438'},reverse:true}
+        y:{ticks:{color:'#4a5568',font:{size:9},callback:v=>`${v}${opts.ySuffix||''}`},grid:{color:'#1a2438'},reverse:!!opts.reverse}
       }
     }
   });
@@ -459,33 +491,54 @@ async function loadNDVI(){
     const d=await r.json();
     if(map.getSource('ndvi')){map.getSource('ndvi').setData(d);return;}
     map.addSource('ndvi',{type:'geojson',data:d});
-    map.addLayer({id:'ndvi-ring',type:'circle',source:'ndvi',paint:{
+    const ndviLayer={id:'ndvi-ring',type:'circle',source:'ndvi',paint:{
       'circle-radius':14,
       'circle-color':'rgba(0,0,0,0)',
       'circle-stroke-color':['get','color'],
       'circle-stroke-width':2,
       'circle-stroke-opacity':0.7
-    }},'wells-glow');
+    }};
+    if(map.getLayer('wells-glow'))map.addLayer(ndviLayer,'wells-glow');
+    else map.addLayer(ndviLayer);
     map.on('click','ndvi-ring',async e=>{
       const p=e.features[0].properties;
       const rawCoords=e.features[0].geometry.coordinates;
       const coords=[parseFloat(rawCoords[0]),parseFloat(rawCoords[1])];
       document.getElementById('detail').classList.add('open');
-      document.getElementById('det-name').textContent=`NDVI — ${p.location}`;
+      document.getElementById('det-name').textContent=`NDVI - ${p.location}`;
       document.getElementById('det-sub').textContent=p.kabupaten;
       const c=p.color||'#10b981';
-      document.getElementById('det-badge').innerHTML=`<div class="status-pill" style="background:${c}18;color:${c};border-color:${c}40;margin-bottom:10px">${(p.kondisi||'NDVI').toUpperCase()} — ${parseFloat(p.avg_ndvi).toFixed(3)}</div>`;
+      document.getElementById('det-badge').innerHTML=`<div class="status-pill" style="background:${c}18;color:${c};border-color:${c}40;margin-bottom:10px">${(p.kondisi||'NDVI').toUpperCase()} - ${parseFloat(p.avg_ndvi).toFixed(3)}</div>`;
       document.getElementById('det-metrics').innerHTML=`
-        <div class="metric"><span class="metric-k">Rata-rata NDVI</span><span class="metric-v" style="color:${c}">${parseFloat(p.avg_ndvi).toFixed(3)}</span></div>
-        <div class="metric"><span class="metric-k">Min NDVI</span><span class="metric-v">${parseFloat(p.min_ndvi).toFixed(3)}</span></div>
-        <div class="metric"><span class="metric-k">Max NDVI</span><span class="metric-v">${parseFloat(p.max_ndvi).toFixed(3)}</span></div>
+        <div class="metric"><span class="metric-k">NDVI terbaru</span><span class="metric-v" style="color:${c}">${parseFloat(p.avg_ndvi).toFixed(3)}</span></div>
+        <div class="metric"><span class="metric-k">Snapshot</span><span class="metric-v">${formatMonthLabel(p.latest_period)}</span></div>
+        <div class="metric"><span class="metric-k">Min historis</span><span class="metric-v">${parseFloat(p.min_ndvi).toFixed(3)}</span></div>
+        <div class="metric"><span class="metric-k">Max historis</span><span class="metric-v">${parseFloat(p.max_ndvi).toFixed(3)}</span></div>
         <div class="metric"><span class="metric-k">Data bulan</span><span class="metric-v">${p.n_months} bulan</span></div>
         <div class="metric"><span class="metric-k">Resolusi</span><span class="metric-v">Sentinel-2 10m</span></div>`;
-      document.getElementById('det-legal').innerHTML=`NDVI = (B8-B4)/(B8+B4) · Rouse et al. (1974)<br>Cloud filter: &lt;30% · 2023–2024`;
+      document.getElementById('det-legal').innerHTML=`NDVI = (B8-B4)/(B8+B4) · Rouse et al. (1974)<br>Cloud filter: &lt;30% · Snapshot lokasi memakai observasi terbaru`;
       try{
         const ts=await fetch(`${API}/ndvi/timeseries/${encodeURIComponent(p.location)}`);
-        if(ts.ok){const td=await ts.json();if(td.series){renderDetChart(td.series.map(s=>s.period),td.series.map(s=>s.ndvi),null);}}
-      }catch{}
+        if(ts.ok){
+          const td=await ts.json();
+          if(td.series&&td.series.length){
+            renderDetChart(td.series.map(s=>s.period),td.series.map(s=>s.ndvi),{
+              chartLabel:'NDVI Historis per Bulan',
+              seriesLabel:'NDVI',
+              color:'#10b981',
+              backgroundColor:'rgba(16,185,129,.08)',
+              ySuffix:'',
+              reverse:false
+            });
+          }else{
+            showNoTimeSeries('Data historis NDVI tidak tersedia');
+          }
+        }else{
+          showNoTimeSeries('Data historis NDVI tidak tersedia');
+        }
+      }catch{
+        showNoTimeSeries('Data historis NDVI tidak tersedia');
+      }
       map.flyTo({center:coords,zoom:Math.max(map.getZoom(),10)});
     });
     map.on('mouseenter','ndvi-ring',()=>{map.getCanvas().style.cursor='pointer';});
@@ -521,7 +574,7 @@ async function loadGrace(){
 // AI
 async function loadAI(){
   const el=document.getElementById('ai-text');
-  el.textContent='Menganalisis data GRACE + Sentinel-2...';
+  el.textContent='Menganalisis TWS GRACE + NDVI Sentinel-2...';
   try{
     const r=await fetch(`${API}/ai/interpret`);
     if(r.ok){const d=await r.json();el.textContent=d.interpretation;}
@@ -548,9 +601,9 @@ async function loadESDM(){
       const p=e.features[0].properties;
       const coords=e.features[0].geometry.coordinates;
       document.getElementById('detail').classList.add('open');
-      document.getElementById('det-name').textContent=p.kode_sumur+' — '+p.desa;
+      document.getElementById('det-name').textContent=p.kode_sumur+' - '+p.desa;
       document.getElementById('det-sub').textContent=p.kecamatan+' · '+p.kabupaten;
-      document.getElementById('det-badge').innerHTML='<div class="status-pill" style="background:#00d4ff18;color:#00d4ff;border-color:#00d4ff40;margin-bottom:10px">DATA REAL — ESDM NTB</div>';
+      document.getElementById('det-badge').innerHTML='<div class="status-pill" style="background:#00d4ff18;color:#00d4ff;border-color:#00d4ff40;margin-bottom:10px">DATA REAL - ESDM NTB</div>';
       document.getElementById('det-metrics').innerHTML=`
         <div class="metric"><span class="metric-k">Kode sumur</span><span class="metric-v">${p.kode_sumur}</span></div>
         <div class="metric"><span class="metric-k">Fungsi</span><span class="metric-v">${p.fungsi||'–'}</span></div>
@@ -560,6 +613,7 @@ async function loadESDM(){
         <div class="metric"><span class="metric-k">Kedalaman</span><span class="metric-v">${p.kedalaman_m?p.kedalaman_m+' m':'–'}</span></div>
         <div class="metric"><span class="metric-k">Tahun</span><span class="metric-v">${p.tahun||'–'}</span></div>
         <div class="metric"><span class="metric-k">Dibangun oleh</span><span class="metric-v">${p.dibangun_oleh||'–'}</span></div>`;
+      showNoTimeSeries('Tidak ada time series untuk titik inventaris ESDM');
       document.getElementById('det-legal').innerHTML='Data real ESDM NTB / Badan Geologi<br>PP No. 43 Tahun 2008';
       map.flyTo({center:coords,zoom:Math.max(map.getZoom(),12)});
     });

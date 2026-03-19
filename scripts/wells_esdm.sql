@@ -292,4 +292,16 @@ INSERT INTO wells_esdm (kode_sumur,fungsi,lat,lon,dusun,desa,kecamatan,kabupaten
   ('SB-156','Air Bersih',-8.68507,116.16294,'Dsn. Enjak','Banyu Urip','Lembar','Lombok Barat','Ditjen Minerba / Badan Geologi',NULL,2007.0,ST_SetSRID(ST_MakePoint(116.16294,-8.68507),4326)),
   ('SB-155','Air Bersih',-8.78201,116.09251,'Dsn. Batubagus','Mareje','Lembar','Lombok Barat','Distamben NTB',NULL,2007.0,ST_SetSRID(ST_MakePoint(116.09251,-8.78201),4326)),
   ('SB-154','Air Bersih',-8.77677,116.04767,'Dsn. Empol','Sekotong Tengah','Sekotong','Lombok Barat','Distamben NTB',NULL,2003.0,ST_SetSRID(ST_MakePoint(116.04767,-8.77677),4326)),
-  ('SB-153','Air Bersih',-8.63473,116.15861,'Dsn. Kr.bedil Selatan','Kediri','Kediri','Lombok Barat','Kanwil ESDM NTB',NULL,2000.0,ST_SetSRID(ST_MakePoint(116.15861,-8.63473),4326));
+  ('SB-153','Air Bersih',-8.63473,116.15861,'Dsn. Kr.bedil Selatan','Kediri','Kediri','Lombok Barat','Kanwil ESDM NTB',NULL,2000.0,ST_SetSRID(ST_MakePoint(116.15861,-8.63473),4326))
+ON CONFLICT (kode_sumur) DO UPDATE SET
+    fungsi = EXCLUDED.fungsi,
+    lat = EXCLUDED.lat,
+    lon = EXCLUDED.lon,
+    dusun = EXCLUDED.dusun,
+    desa = EXCLUDED.desa,
+    kecamatan = EXCLUDED.kecamatan,
+    kabupaten = EXCLUDED.kabupaten,
+    dibangun_oleh = EXCLUDED.dibangun_oleh,
+    kedalaman_m = EXCLUDED.kedalaman_m,
+    tahun_pembangunan = EXCLUDED.tahun_pembangunan,
+    geom = EXCLUDED.geom;
