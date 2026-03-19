@@ -13,6 +13,19 @@ DEFAULT_DB_URL = os.getenv("DATABASE_URL", "postgresql://rizki:ntb_env_2024@db:5
 DEFAULT_CSV_PATH = os.getenv("NDVI_CSV_PATH", "/data/sentinel2/ntb_ndvi_timeseries.csv")
 
 
+NDVI_LOCATION_ANCHORS = {
+    "Bima": (-8.4823, 118.7234),
+    "Dompu": (-8.5312, 118.4623),
+    "Hu u Dompu": (-8.8923, 118.2834),
+    "Lombok Utara": (-8.3512, 116.1423),
+    "Sekongkang": (-8.9823, 116.7012),
+    "Sumbawa Barat": (-8.8923, 116.7534),
+    "Sumbawa Kota": (-8.4932, 117.4174),
+    "Taliwang": (-8.7234, 116.8523),
+    "Tambora": (-8.2912, 118.0034),
+}
+
+
 CREATE_SQL = """
 CREATE TABLE IF NOT EXISTS sentinel2_ndvi (
     id                SERIAL PRIMARY KEY,
@@ -86,11 +99,16 @@ def load_rows(csv_path: Path, data_source: str):
     with csv_path.open("r", encoding="utf-8-sig", newline="") as handle:
         reader = csv.DictReader(handle)
         for row in reader:
+            location = row["location"].strip()
+            lat, lon = NDVI_LOCATION_ANCHORS.get(
+                location,
+                (float(row["lat"]), float(row["lon"]))
+            )
             rows.append((
-                row["location"].strip(),
+                location,
                 row["kabupaten"].strip(),
-                float(row["lat"]),
-                float(row["lon"]),
+                lat,
+                lon,
                 date.fromisoformat(row["period_date"]),
                 float(row["ndvi"]),
                 parse_float(row.get("ndwi")),

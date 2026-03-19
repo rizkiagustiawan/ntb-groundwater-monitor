@@ -30,6 +30,73 @@ app.add_middleware(
 DATABASE_URL = os.getenv("DATABASE_URL", "postgresql://rizki:ntb_env_2024@db:5432/ntb_groundwater")
 
 
+NDVI_SPATIAL_ANCHORS = {
+    "Bima": {
+        "lat": -8.4823,
+        "lon": 118.7234,
+        "anchor_name": "Sumur Pantau Raba",
+        "anchor_basis": "Anchor representatif kabupaten",
+        "anchor_source": "Koordinat referensi sumur pantau"
+    },
+    "Dompu": {
+        "lat": -8.5312,
+        "lon": 118.4623,
+        "anchor_name": "Sumur Pantau Dompu Kota",
+        "anchor_basis": "Anchor representatif kabupaten",
+        "anchor_source": "Koordinat referensi sumur pantau"
+    },
+    "Hu u Dompu": {
+        "lat": -8.8923,
+        "lon": 118.2834,
+        "anchor_name": "Sumur Pantau Hu u",
+        "anchor_basis": "Anchor representatif kecamatan",
+        "anchor_source": "Koordinat referensi sumur pantau"
+    },
+    "Lombok Utara": {
+        "lat": -8.3512,
+        "lon": 116.1423,
+        "anchor_name": "Sumur Pantau Tanjung",
+        "anchor_basis": "Anchor representatif kabupaten",
+        "anchor_source": "Koordinat referensi sumur pantau"
+    },
+    "Sekongkang": {
+        "lat": -8.9823,
+        "lon": 116.7012,
+        "anchor_name": "Sumur Pantau Sekongkang",
+        "anchor_basis": "Anchor representatif kecamatan",
+        "anchor_source": "Koordinat referensi sumur pantau"
+    },
+    "Sumbawa Barat": {
+        "lat": -8.8923,
+        "lon": 116.7534,
+        "anchor_name": "Sumur Pantau Maluk",
+        "anchor_basis": "Anchor representatif kabupaten",
+        "anchor_source": "Koordinat referensi sumur pantau"
+    },
+    "Sumbawa Kota": {
+        "lat": -8.4932,
+        "lon": 117.4174,
+        "anchor_name": "Sumur Pantau Sumbawa Kota",
+        "anchor_basis": "Anchor representatif kabupaten",
+        "anchor_source": "Koordinat referensi sumur pantau"
+    },
+    "Taliwang": {
+        "lat": -8.7234,
+        "lon": 116.8523,
+        "anchor_name": "Sumur Pantau Taliwang",
+        "anchor_basis": "Anchor representatif kecamatan",
+        "anchor_source": "Koordinat referensi sumur pantau"
+    },
+    "Tambora": {
+        "lat": -8.2912,
+        "lon": 118.0034,
+        "anchor_name": "Sumur Pantau Tambora",
+        "anchor_basis": "Anchor representatif kawasan",
+        "anchor_source": "Koordinat referensi sumur pantau"
+    }
+}
+
+
 async def get_db():
     return await asyncpg.connect(DATABASE_URL)
 
@@ -57,6 +124,19 @@ def format_period_label(period_value: Optional[date]) -> Optional[str]:
     if not period_value:
         return None
     return period_value.strftime("%Y-%m")
+
+
+def resolve_ndvi_anchor(location: str, fallback_lat: float, fallback_lon: float):
+    anchor = NDVI_SPATIAL_ANCHORS.get(location)
+    if not anchor:
+        return {
+            "lat": fallback_lat,
+            "lon": fallback_lon,
+            "anchor_name": location,
+            "anchor_basis": "Anchor observasi",
+            "anchor_source": "Koordinat fixture Sentinel-2"
+        }
+    return anchor
 
 
 async def get_ndvi_period_range(conn):
@@ -522,24 +602,31 @@ async def get_ndvi_summary():
         rows = await get_latest_ndvi_rows(conn)
         period_range = await get_ndvi_period_range(conn)
 
-        features = [{
-            "type": "Feature",
-            "geometry": {
-                "type": "Point",
-                "coordinates": [float(r["lon"]), float(r["lat"])]
-            },
-            "properties": {
-                "location":  r["location"],
-                "kabupaten": r["kabupaten"],
-                "avg_ndvi":  float(r["latest_ndvi"]),
-                "min_ndvi":  float(r["min_ndvi"]),
-                "max_ndvi":  float(r["max_ndvi"]),
-                "kondisi":   classify_ndvi(float(r["latest_ndvi"])),
-                "n_months":  r["n_months"],
-                "latest_period": format_period_label(r["latest_period"]),
-                "color": ndvi_color(classify_ndvi(float(r["latest_ndvi"])))
-            }
-        } for r in rows]
+        features = []
+        for r in rows:
+            anchor = resolve_ndvi_anchor(r["location"], float(r["lat"]), float(r["lon"]))
+            kondisi = classify_ndvi(float(r["latest_ndvi"]))
+            features.append({
+                "type": "Feature",
+                "geometry": {
+                    "type": "Point",
+                    "coordinates": [anchor["lon"], anchor["lat"]]
+                },
+                "properties": {
+                    "location": r["location"],
+                    "kabupaten": r["kabupaten"],
+                    "avg_ndvi": float(r["latest_ndvi"]),
+                    "min_ndvi": float(r["min_ndvi"]),
+                    "max_ndvi": float(r["max_ndvi"]),
+                    "kondisi": kondisi,
+                    "n_months": r["n_months"],
+                    "latest_period": format_period_label(r["latest_period"]),
+                    "color": ndvi_color(kondisi),
+                    "anchor_name": anchor["anchor_name"],
+                    "anchor_basis": anchor["anchor_basis"],
+                    "anchor_source": anchor["anchor_source"]
+                }
+            })
 
         return {
             "type": "FeatureCollection",
@@ -551,7 +638,9 @@ async def get_ndvi_summary():
                 "latest_snapshot": format_period_label(period_range["max_period"]) if period_range else None,
                 "cloud_filter": "< 30% cloud cover",
                 "resolution": "10 meter",
-                "summary_basis": "Nilai per lokasi memakai observasi terbaru; min/max adalah rentang historis pada seri waktu yang tersedia."
+                "summary_basis": "Nilai per lokasi memakai observasi terbaru; min/max adalah rentang historis pada seri waktu yang tersedia.",
+                "spatial_note": "Titik NDVI pada peta adalah anchor spasial representatif per lokasi, diselaraskan ke titik referensi monitoring agar tidak memakai koordinat acak.",
+                "groundwater_note": "NDVI merepresentasikan kondisi vegetasi di sekitar anchor, bukan pembacaan langsung muka air tanah."
             },
             "features": features
         }

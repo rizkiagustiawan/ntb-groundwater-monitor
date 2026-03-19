@@ -34,7 +34,7 @@
 body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--text);height:100vh;overflow:hidden;display:flex;flex-direction:column}
 
 /* TOPBAR */
-.topbar{height:48px;background:var(--surface);border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;padding:0 16px;flex-shrink:0;z-index:100}
+.topbar{height:48px;background:var(--surface);border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;padding:0 16px;flex-shrink:0;z-index:100;gap:12px}
 .topbar-left{display:flex;align-items:center;gap:12px}
 .logo-pulse{width:8px;height:8px;border-radius:50%;background:var(--green);box-shadow:0 0 0 0 var(--green);animation:pulse-ring 2s ease-out infinite}
 @keyframes pulse-ring{0%{box-shadow:0 0 0 0 rgba(16,185,129,.6)}70%{box-shadow:0 0 0 8px rgba(16,185,129,0)}100%{box-shadow:0 0 0 0 rgba(16,185,129,0)}}
@@ -53,7 +53,7 @@ body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--text);heigh
 #map{flex:1;position:relative}
 
 /* FLOATING SIDEBAR */
-.sidebar{position:absolute;left:12px;top:12px;bottom:12px;width:260px;background:rgba(13,20,33,.92);backdrop-filter:blur(12px);border:1px solid var(--border);border-radius:12px;display:flex;flex-direction:column;overflow:hidden;z-index:10}
+.sidebar{position:absolute;left:12px;top:12px;bottom:12px;width:280px;background:rgba(13,20,33,.92);backdrop-filter:blur(12px);border:1px solid var(--border);border-radius:12px;display:flex;flex-direction:column;overflow-y:auto;overflow-x:hidden;z-index:10}
 .sidebar-header{padding:12px 14px;border-bottom:1px solid var(--border)}
 .sidebar-title{font-size:10px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.1em;margin-bottom:10px}
 
@@ -79,11 +79,17 @@ select:focus{border-color:var(--accent)}
 .legend-item:last-child{margin-bottom:0}
 .dot{width:8px;height:8px;border-radius:50%;flex-shrink:0}
 
+/* SCIENCE NOTES */
+.science-section{padding:10px 14px;border-bottom:1px solid var(--border)}
+.science-badges{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px}
+.science-badge{font-size:9px;padding:3px 7px;border-radius:999px;background:var(--surface2);border:1px solid var(--border2);color:#9fb0c9;font-family:'JetBrains Mono',monospace}
+.science-note{font-size:10px;line-height:1.55;color:#94a3b8}
+
 /* AI PANEL */
 .ai-section{padding:10px 14px;border-bottom:1px solid var(--border)}
 .ai-label{font-size:9px;font-weight:600;color:var(--accent);text-transform:uppercase;letter-spacing:.1em;margin-bottom:6px;display:flex;align-items:center;gap:5px}
 .ai-label::before{content:'';width:5px;height:5px;border-radius:50%;background:var(--accent);display:inline-block}
-.ai-text{font-size:10px;color:#94a3b8;line-height:1.65;max-height:110px;overflow-y:auto}
+.ai-text{font-size:10px;color:#94a3b8;line-height:1.65;max-height:150px;overflow-y:auto}
 .ai-text::-webkit-scrollbar{width:3px}
 .ai-text::-webkit-scrollbar-thumb{background:var(--border2);border-radius:2px}
 .btn-ai{width:100%;margin-top:7px;padding:5px;background:transparent;border:1px solid var(--border2);color:var(--muted);font-size:10px;border-radius:5px;cursor:pointer;transition:all .15s;font-family:'Inter',sans-serif}
@@ -91,7 +97,7 @@ select:focus{border-color:var(--accent)}
 
 /* WELL LIST */
 .well-label{padding:8px 14px 4px;font-size:9px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.1em;flex-shrink:0}
-.well-scroll{flex:1;overflow-y:auto}
+.well-scroll{flex:none;min-height:160px;max-height:240px;overflow-y:auto}
 .well-scroll::-webkit-scrollbar{width:3px}
 .well-scroll::-webkit-scrollbar-thumb{background:var(--border2);border-radius:2px}
 .well-empty{padding:10px 14px;font-size:10px;line-height:1.6;color:var(--muted)}
@@ -141,6 +147,28 @@ select:focus{border-color:var(--accent)}
 .maplibregl-ctrl-attrib{background:rgba(13,20,33,.7)!important;color:var(--muted)!important;font-size:9px!important}
 .maplibregl-ctrl-scale{background:rgba(13,20,33,.7)!important;border-color:var(--muted)!important;color:var(--muted)!important;font-size:9px!important}
 
+@media (max-width:1024px){
+  .sidebar{width:248px}
+  .detail{width:280px;transform:translateX(300px)}
+}
+
+@media (max-width:768px){
+  body{height:100dvh}
+  .topbar{height:auto;flex-wrap:wrap;align-items:flex-start;padding:10px 12px}
+  .topbar-left,.topbar-right{width:100%}
+  .topbar-badges{width:100%;flex-wrap:wrap}
+  .logo-sub{display:block;margin-left:0;margin-top:2px}
+  .btn-pdf{width:100%}
+  .sidebar{left:8px;right:8px;top:8px;bottom:auto;width:auto;max-height:44vh}
+  .detail{left:8px;right:8px;top:auto;bottom:8px;width:auto;height:min(50vh,380px);transform:translateY(calc(100% + 16px))}
+  .detail.open{transform:translateY(0)}
+  .grace-strip{height:150px;padding:8px 10px}
+  .grace-header{flex-direction:column;align-items:flex-start;gap:6px}
+  .grace-legend{flex-wrap:wrap;gap:8px}
+  .maplibregl-ctrl-top-right{top:calc(44vh + 24px)!important}
+  .maplibregl-ctrl-bottom-right{bottom:154px!important}
+}
+
 /* LOADING */
 .loader{position:absolute;inset:0;background:var(--bg);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;z-index:200}
 .loader-dots{display:flex;gap:6px}
@@ -159,14 +187,14 @@ select:focus{border-color:var(--accent)}
     <div class="logo-pulse"></div>
     <div>
       <span class="logo-text">NTB Groundwater Monitor</span>
-      <span class="logo-sub">Platform Monitoring Air Tanah — Nusa Tenggara Barat</span>
+      <span class="logo-sub">Platform Monitoring Air Tanah - Nusa Tenggara Barat</span>
     </div>
   </div>
   <div class="topbar-badges">
-    <span class="badge">PP 43/2008</span>
-    <span class="badge">GRACE RL06.3</span>
-    <span class="badge">SENTINEL-2</span>
-    <span class="badge">v1.0.0</span>
+    <span class="badge">280 ESDM REAL</span>
+    <span class="badge">23 WELLS REP</span>
+    <span class="badge">GRACE REGIONAL</span>
+    <span class="badge">NDVI SNAPSHOT</span>
   </div>
   <div class="topbar-right">
     <button class="btn-pdf" onclick="window.open('/api/report/pdf','_blank')">Download Laporan PDF</button>
@@ -193,10 +221,10 @@ select:focus{border-color:var(--accent)}
     <div class="sidebar-header">
       <div class="sidebar-title">Ringkasan NTB</div>
       <div class="stat-grid">
-        <div class="stat"><div class="stat-val c-muted" id="s-total">–</div><div class="stat-lbl">Total Sumur</div></div>
-        <div class="stat"><div class="stat-val c-green" id="s-normal">–</div><div class="stat-lbl">Normal</div></div>
-        <div class="stat"><div class="stat-val c-amber" id="s-waspada">–</div><div class="stat-lbl">Waspada</div></div>
-        <div class="stat"><div class="stat-val c-red" id="s-kritis">–</div><div class="stat-lbl">Kritis</div></div>
+        <div class="stat"><div class="stat-val c-muted" id="s-total">-</div><div class="stat-lbl">Total Sumur</div></div>
+        <div class="stat"><div class="stat-val c-green" id="s-normal">-</div><div class="stat-lbl">Normal</div></div>
+        <div class="stat"><div class="stat-val c-amber" id="s-waspada">-</div><div class="stat-lbl">Waspada</div></div>
+        <div class="stat"><div class="stat-val c-red" id="s-kritis">-</div><div class="stat-lbl">Kritis</div></div>
       </div>
     </div>
 
@@ -221,16 +249,28 @@ select:focus{border-color:var(--accent)}
 
     <div class="legend-section">
       <div class="legend-item"><div class="dot" style="background:#10b981"></div>Normal (< 30%)</div>
-      <div class="legend-item"><div class="dot" style="background:#f59e0b"></div>Waspada (30–60%)</div>
-      <div class="legend-item"><div class="dot" style="background:#ef4444"></div>Kritis (60–80%)</div>
+      <div class="legend-item"><div class="dot" style="background:#f59e0b"></div>Waspada (30-60%)</div>
+      <div class="legend-item"><div class="dot" style="background:#ef4444"></div>Kritis (60-80%)</div>
       <div class="legend-item"><div class="dot" style="background:#7f1d1d"></div>Sangat Kritis (> 80%)</div>
       <div class="legend-item"><div class="dot" style="background:rgba(255,255,255,.15);border:1px solid #10b981"></div>NDVI Sentinel-2</div>
+    </div>
+
+    <div class="science-section">
+      <div class="sidebar-title" style="margin-bottom:8px">Catatan Ilmiah</div>
+      <div class="science-badges">
+        <span class="science-badge">GRACE = TWS regional</span>
+        <span class="science-badge">NDVI = vegetasi 10 m</span>
+        <span class="science-badge">NDVI anchor representatif</span>
+      </div>
+      <div class="science-note">
+        Layer GRACE dibaca sebagai indikator simpanan air daratan skala regional. Ring NDVI mewakili kondisi vegetasi di sekitar titik anchor representatif, bukan pengukuran langsung muka air tanah.
+      </div>
     </div>
 
     <div class="ai-section">
       <div class="ai-label">AI Interpretation</div>
       <div class="ai-text" id="ai-text">Memuat analisis...</div>
-      <button class="btn-ai" onclick="loadAI()">Perbarui Analisis ↺</button>
+      <button class="btn-ai" onclick="loadAI()">Perbarui Analisis</button>
     </div>
 
     <div class="well-label">Daftar Sumur Pantau</div>
@@ -241,10 +281,10 @@ select:focus{border-color:var(--accent)}
   <div class="detail" id="detail">
     <div class="det-header">
       <div>
-        <div class="det-title" id="det-name">–</div>
-        <div class="det-sub" id="det-sub">–</div>
+        <div class="det-title" id="det-name">-</div>
+        <div class="det-sub" id="det-sub">-</div>
       </div>
-      <button class="btn-close" onclick="closeDetail()">✕</button>
+      <button class="btn-close" onclick="closeDetail()">x</button>
     </div>
     <div class="det-body">
       <div id="det-badge"></div>
@@ -272,6 +312,7 @@ select:focus{border-color:var(--accent)}
 
 <script>
 const API = '/api';
+const MOBILE_QUERY = window.matchMedia('(max-width: 768px)');
 let map, allFeatures=[], chartInst=null, selId=null;
 
 function setChartVisibility(label, visible=true){
@@ -291,7 +332,7 @@ function showNoTimeSeries(label='Data historis tidak tersedia'){
 }
 
 function formatMonthLabel(period){
-  if(!period)return '–';
+  if(!period)return '-';
   const [y,m]=period.split('-').map(Number);
   if(!y||!m)return period;
   return new Date(y,m-1,1).toLocaleDateString('id-ID',{year:'numeric',month:'long'});
@@ -306,11 +347,11 @@ map = new maplibregl.Map({
   container:'map',
   style:{
     version:8,
-    sources:{osm:{type:'raster',tiles:['https://tile.openstreetmap.org/{z}/{x}/{y}.png'],tileSize:256,attribution:'© OpenStreetMap'}},
+    sources:{osm:{type:'raster',tiles:['https://tile.openstreetmap.org/{z}/{x}/{y}.png'],tileSize:256,attribution:'OpenStreetMap'}},
     layers:[{id:'osm',type:'raster',source:'osm',paint:{'raster-opacity':0.25,'raster-saturation':-0.8,'raster-brightness-min':0.1}}],
     background:{type:'background',layout:{},paint:{'background-color':'#080c14'}}
   },
-  center:[117.8,-8.6],zoom:8,minZoom:6,maxZoom:16
+  center:[117.8,-8.6],zoom:MOBILE_QUERY.matches?7.2:8,minZoom:6,maxZoom:16
 });
 map.addControl(new maplibregl.NavigationControl(),'top-right');
 map.addControl(new maplibregl.ScaleControl({unit:'metric'}),'bottom-right');
@@ -364,7 +405,7 @@ function renderList(features){
     renderWellListMessage('Tidak ada sumur pantau yang cocok dengan filter aktif.');
     return;
   }
-  const sl={normal:'Normal',waspada:'Waspada',kritis:'Kritis',sangat_kritis:'S.Kritis',tidak_ada_data:'–'};
+  const sl={normal:'Normal',waspada:'Waspada',kritis:'Kritis',sangat_kritis:'S.Kritis',tidak_ada_data:'-'};
   document.getElementById('well-list').innerHTML=features.map(f=>{
     const p=f.properties;
     const coords=f.geometry.coordinates;
@@ -374,9 +415,9 @@ function renderList(features){
       <div class="well-dot" style="background:${p.color||'#4a5568'}"></div>
       <div style="flex:1;min-width:0">
         <div class="well-name">${p.name||p.well_code}</div>
-        <div class="well-kec">${p.kecamatan} · ${p.kabupaten}</div>
+        <div class="well-kec">${p.kecamatan} | ${p.kabupaten}</div>
       </div>
-      <span class="well-status s-${p.status_level}">${sl[p.status_level]||'–'}</span>
+      <span class="well-status s-${p.status_level}">${sl[p.status_level]||'-'}</span>
     </div>`;
   }).join('');
 }
@@ -425,22 +466,22 @@ function closeDetail(){
 
 function fillBasic(p){
   document.getElementById('det-name').textContent=p.name||p.well_code;
-  document.getElementById('det-sub').textContent=`${p.kecamatan} · ${p.kabupaten}`;
+  document.getElementById('det-sub').textContent=`${p.kecamatan} | ${p.kabupaten}`;
   const sc={normal:'#10b981',waspada:'#f59e0b',kritis:'#ef4444',sangat_kritis:'#7f1d1d',tidak_ada_data:'#4a5568'};
   const sl={normal:'Normal',waspada:'Waspada',kritis:'Kritis',sangat_kritis:'Sangat Kritis',tidak_ada_data:'Tidak Ada Data'};
   const c=sc[p.status_level]||'#4a5568';
-  document.getElementById('det-badge').innerHTML=`<div class="status-pill" style="background:${c}18;color:${c};border-color:${c}40;margin-bottom:10px">${sl[p.status_level]||'–'}</div>`;
-  const fmt=v=>v!==null&&v!==undefined?v:'–';
-  const fmtDate=d=>d?new Date(d).toLocaleDateString('id-ID',{year:'numeric',month:'long'}):'–';
+  document.getElementById('det-badge').innerHTML=`<div class="status-pill" style="background:${c}18;color:${c};border-color:${c}40;margin-bottom:10px">${sl[p.status_level]||'-'}</div>`;
+  const fmt=v=>v!==null&&v!==undefined?v:'-';
+  const fmtDate=d=>d?new Date(d).toLocaleDateString('id-ID',{year:'numeric',month:'long'}):'-';
   document.getElementById('det-metrics').innerHTML=`
     <div class="metric"><span class="metric-k">Kode sumur</span><span class="metric-v">${fmt(p.well_code)}</span></div>
     <div class="metric"><span class="metric-k">Jenis akuifer</span><span class="metric-v">${fmt(p.aquifer_type)}</span></div>
-    <div class="metric"><span class="metric-k">Kedalaman</span><span class="metric-v">${p.depth_m?p.depth_m+' m':'–'}</span></div>
-    <div class="metric"><span class="metric-k">Muka air</span><span class="metric-v" style="color:${c}">${p.water_level_m?p.water_level_m+' m':' –'}${p.water_level_pct?' ('+p.water_level_pct+'%)':''}</span></div>
+    <div class="metric"><span class="metric-k">Kedalaman</span><span class="metric-v">${p.depth_m?p.depth_m+' m':'-'}</span></div>
+    <div class="metric"><span class="metric-k">Muka air</span><span class="metric-v" style="color:${c}">${p.water_level_m?p.water_level_m+' m':' -'}${p.water_level_pct?' ('+p.water_level_pct+'%)':''}</span></div>
     <div class="metric"><span class="metric-k">pH</span><span class="metric-v">${fmt(p.ph)}</span></div>
-    <div class="metric"><span class="metric-k">Konduktivitas</span><span class="metric-v">${p.conductivity_us?p.conductivity_us+' µS/cm':'–'}</span></div>
+    <div class="metric"><span class="metric-k">Konduktivitas</span><span class="metric-v">${p.conductivity_us?p.conductivity_us+' uS/cm':'-'}</span></div>
     <div class="metric"><span class="metric-k">Diukur</span><span class="metric-v">${fmtDate(p.measured_at)}</span></div>`;
-  document.getElementById('det-legal').innerHTML=`PP No. 43 Tahun 2008 · SNI 6989.58:2008<br>Status: muka air / kedalaman sumur`;
+  document.getElementById('det-legal').innerHTML=`PP No. 43 Tahun 2008 | SNI 6989.58:2008<br>Status: muka air / kedalaman sumur`;
 }
 
 function fillChart(data){
@@ -505,18 +546,20 @@ async function loadNDVI(){
       const rawCoords=e.features[0].geometry.coordinates;
       const coords=[parseFloat(rawCoords[0]),parseFloat(rawCoords[1])];
       document.getElementById('detail').classList.add('open');
-      document.getElementById('det-name').textContent=`NDVI - ${p.location}`;
-      document.getElementById('det-sub').textContent=p.kabupaten;
+      document.getElementById('det-name').textContent=`NDVI Sentinel-2 - ${p.location}`;
+      document.getElementById('det-sub').textContent=`${p.kabupaten} | ${p.anchor_basis || 'Anchor representatif'}`;
       const c=p.color||'#10b981';
       document.getElementById('det-badge').innerHTML=`<div class="status-pill" style="background:${c}18;color:${c};border-color:${c}40;margin-bottom:10px">${(p.kondisi||'NDVI').toUpperCase()} - ${parseFloat(p.avg_ndvi).toFixed(3)}</div>`;
       document.getElementById('det-metrics').innerHTML=`
         <div class="metric"><span class="metric-k">NDVI terbaru</span><span class="metric-v" style="color:${c}">${parseFloat(p.avg_ndvi).toFixed(3)}</span></div>
         <div class="metric"><span class="metric-k">Snapshot</span><span class="metric-v">${formatMonthLabel(p.latest_period)}</span></div>
+        <div class="metric"><span class="metric-k">Anchor spasial</span><span class="metric-v">${p.anchor_name||p.location}</span></div>
+        <div class="metric"><span class="metric-k">Basis titik</span><span class="metric-v">${p.anchor_basis||'Representatif'}</span></div>
         <div class="metric"><span class="metric-k">Min historis</span><span class="metric-v">${parseFloat(p.min_ndvi).toFixed(3)}</span></div>
         <div class="metric"><span class="metric-k">Max historis</span><span class="metric-v">${parseFloat(p.max_ndvi).toFixed(3)}</span></div>
         <div class="metric"><span class="metric-k">Data bulan</span><span class="metric-v">${p.n_months} bulan</span></div>
         <div class="metric"><span class="metric-k">Resolusi</span><span class="metric-v">Sentinel-2 10m</span></div>`;
-      document.getElementById('det-legal').innerHTML=`NDVI = (B8-B4)/(B8+B4) · Rouse et al. (1974)<br>Cloud filter: &lt;30% · Snapshot lokasi memakai observasi terbaru`;
+      document.getElementById('det-legal').innerHTML=`NDVI = (B8-B4)/(B8+B4) | Rouse et al. (1974)<br>Cloud filter: &lt;30% | ${p.anchor_source || 'Anchor representatif'}<br>Indikator vegetasi, bukan pembacaan langsung muka air tanah.`;
       try{
         const ts=await fetch(`${API}/ndvi/timeseries/${encodeURIComponent(p.location)}`);
         if(ts.ok){
@@ -602,17 +645,17 @@ async function loadESDM(){
       const coords=e.features[0].geometry.coordinates;
       document.getElementById('detail').classList.add('open');
       document.getElementById('det-name').textContent=p.kode_sumur+' - '+p.desa;
-      document.getElementById('det-sub').textContent=p.kecamatan+' · '+p.kabupaten;
+      document.getElementById('det-sub').textContent=`${p.kecamatan} | ${p.kabupaten}`;
       document.getElementById('det-badge').innerHTML='<div class="status-pill" style="background:#00d4ff18;color:#00d4ff;border-color:#00d4ff40;margin-bottom:10px">DATA REAL - ESDM NTB</div>';
       document.getElementById('det-metrics').innerHTML=`
         <div class="metric"><span class="metric-k">Kode sumur</span><span class="metric-v">${p.kode_sumur}</span></div>
-        <div class="metric"><span class="metric-k">Fungsi</span><span class="metric-v">${p.fungsi||'–'}</span></div>
-        <div class="metric"><span class="metric-k">Desa</span><span class="metric-v">${p.desa||'–'}</span></div>
-        <div class="metric"><span class="metric-k">Kecamatan</span><span class="metric-v">${p.kecamatan||'–'}</span></div>
-        <div class="metric"><span class="metric-k">Kabupaten</span><span class="metric-v">${p.kabupaten||'–'}</span></div>
-        <div class="metric"><span class="metric-k">Kedalaman</span><span class="metric-v">${p.kedalaman_m?p.kedalaman_m+' m':'–'}</span></div>
-        <div class="metric"><span class="metric-k">Tahun</span><span class="metric-v">${p.tahun||'–'}</span></div>
-        <div class="metric"><span class="metric-k">Dibangun oleh</span><span class="metric-v">${p.dibangun_oleh||'–'}</span></div>`;
+        <div class="metric"><span class="metric-k">Fungsi</span><span class="metric-v">${p.fungsi||'-'}</span></div>
+        <div class="metric"><span class="metric-k">Desa</span><span class="metric-v">${p.desa||'-'}</span></div>
+        <div class="metric"><span class="metric-k">Kecamatan</span><span class="metric-v">${p.kecamatan||'-'}</span></div>
+        <div class="metric"><span class="metric-k">Kabupaten</span><span class="metric-v">${p.kabupaten||'-'}</span></div>
+        <div class="metric"><span class="metric-k">Kedalaman</span><span class="metric-v">${p.kedalaman_m?p.kedalaman_m+' m':'-'}</span></div>
+        <div class="metric"><span class="metric-k">Tahun</span><span class="metric-v">${p.tahun||'-'}</span></div>
+        <div class="metric"><span class="metric-k">Dibangun oleh</span><span class="metric-v">${p.dibangun_oleh||'-'}</span></div>`;
       showNoTimeSeries('Tidak ada time series untuk titik inventaris ESDM');
       document.getElementById('det-legal').innerHTML='Data real ESDM NTB / Badan Geologi<br>PP No. 43 Tahun 2008';
       map.flyTo({center:coords,zoom:Math.max(map.getZoom(),12)});
@@ -627,3 +670,4 @@ window.addEventListener('load',()=>setTimeout(loadAI,4000));
 </script>
 </body>
 </html>
+
