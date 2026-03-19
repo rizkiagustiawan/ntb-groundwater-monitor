@@ -529,3 +529,135 @@ async def get_ndvi_timeseries(location: str):
         }
     finally:
         await conn.close()
+
+
+# ============================================================
+# ENDPOINT 8: AI Interpretation via Kimi API
+# ============================================================
+from openai import OpenAI as KimiClient
+import os
+
+@app.get("/ai/interpret")
+async def ai_interpret_ntb():
+    """
+    Interpretasi otomatis kondisi air tanah NTB menggunakan AI.
+    Menggabungkan data GRACE TWS + NDVI Sentinel-2 + status sumur.
+    """
+    conn = await get_db()
+    try:
+        # Ambil data terbaru GRACE
+        grace_rows = await conn.fetch("""
+            SELECT period_date,
+                   ROUND(AVG(tws_anomaly)::numeric, 2) AS avg_tws
+            FROM grace_tws
+            GROUP BY period_date
+            ORDER BY period_date DESC
+            LIMIT 6
+        """)
+
+        # Ambil rata-rata NDVI per lokasi
+        ndvi_rows = await conn.fetch("""
+            SELECT location, kabupaten,
+                   ROUND(AVG(ndvi)::numeric, 3) AS avg_ndvi,
+                   CASE
+                       WHEN AVG(ndvi) >= 0.5 THEN 'Vegetasi Lebat'
+                       WHEN AVG(ndvi) >= 0.3 THEN 'Vegetasi Sedang'
+                       WHEN AVG(ndvi) >= 0.1 THEN 'Vegetasi Jarang'
+                       ELSE 'Lahan Kritis'
+                   END AS kondisi
+            FROM sentinel2_ndvi
+            GROUP BY location, kabupaten
+            ORDER BY avg_ndvi ASC
+            LIMIT 5
+        """)
+
+        # Ambil ringkasan sumur
+        well_rows = await conn.fetch("""
+            SELECT kabupaten,
+                   COUNT(*) FILTER (WHERE status_level='kritis' OR status_level='sangat_kritis') AS kritis,
+                   COUNT(*) AS total
+            FROM well_latest_status
+            GROUP BY kabupaten
+            ORDER BY kritis DESC
+        """)
+
+        # Susun konteks data untuk AI
+        grace_summary = "\n".join([
+            f"  {r['period_date'].strftime('%Y-%m')}: {r['avg_tws']:+.2f} cm EWH"
+            for r in grace_rows
+        ])
+
+        ndvi_summary = "\n".join([
+            f"  {r['location']} ({r['kabupaten']}): NDVI {r['avg_ndvi']} — {r['kondisi']}"
+            for r in ndvi_rows
+        ])
+
+        well_summary = "\n".join([
+            f"  {r['kabupaten']}: {r['kritis']} dari {r['total']} sumur kritis"
+            for r in well_rows
+        ])
+
+        prompt = f"""Kamu adalah Senior Environmental Engineer dengan spesialisasi hidrologi dan monitoring lingkungan di Indonesia.
+
+Berikut adalah data monitoring air tanah Nusa Tenggara Barat (NTB) terkini:
+
+DATA NASA GRACE — Anomali Terrestrial Water Storage (6 bulan terakhir):
+{grace_summary}
+(Nilai negatif = defisit air tanah dibanding baseline 2004-2009)
+
+DATA SENTINEL-2 NDVI — Kondisi Vegetasi (5 lokasi paling kritis):
+{ndvi_summary}
+(NDVI < 0.2 = vegetasi sangat jarang/lahan kritis)
+
+STATUS SUMUR PANTAU:
+{well_summary}
+
+Berikan interpretasi komprehensif dalam Bahasa Indonesia (maksimal 200 kata) yang mencakup:
+1. Kondisi air tanah NTB saat ini berdasarkan data GRACE
+2. Hubungan antara kondisi vegetasi dan ketersediaan air tanah
+3. Kabupaten/area yang paling memerlukan perhatian segera
+4. Rekomendasi tindakan prioritas untuk Dinas ESDM NTB
+
+Gunakan bahasa yang dapat dipahami oleh pejabat pemerintah daerah, bukan hanya ilmuwan.
+Referensikan PP No. 43 Tahun 2008 tentang Pengelolaan Air Tanah jika relevan."""
+
+        # Call Kimi API
+        kimi = KimiClient(
+            api_key=os.getenv('KIMI_API_KEY'),
+            base_url="https://api.moonshot.ai/v1"
+        )
+
+        response = kimi.chat.completions.create(
+            model="moonshot-v1-8k",
+            messages=[{"role": "user", "content": prompt}],
+            temperature=0.3
+        )
+
+        interpretation = response.choices[0].message.content
+
+        return {
+            "generated_at": datetime.now().isoformat(),
+            "data_sources": [
+                "NASA GRACE RL06.3 Mascon",
+                "Copernicus Sentinel-2 MSI",
+                "Data Sumur Pantau NTB"
+            ],
+            "legal_reference": "PP No. 43 Tahun 2008",
+            "ai_model": "moonshot-v1-8k",
+            "interpretation": interpretation,
+            "raw_data": {
+                "grace_6months": [
+                    {"period": r['period_date'].strftime('%Y-%m'),
+                     "tws_cm": float(r['avg_tws'])}
+                    for r in grace_rows
+                ],
+                "ndvi_critical": [
+                    {"location": r['location'],
+                     "ndvi": float(r['avg_ndvi']),
+                     "kondisi": r['kondisi']}
+                    for r in ndvi_rows
+                ]
+            }
+        }
+    finally:
+        await conn.close()

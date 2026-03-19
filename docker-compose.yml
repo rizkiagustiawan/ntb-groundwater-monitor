@@ -20,6 +20,7 @@ services:
     build: ./backend
     environment:
       DATABASE_URL: postgresql://rizki:ntb_env_2024@db:5432/ntb_groundwater
+      KIMI_API_KEY: sk-D4ThagEmk5AJqguYazbXjMDmKzpsW3Ezj0Aqh9fO2xFxahrf
     ports:
       - "8000:8000"
     volumes:

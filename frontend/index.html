@@ -179,7 +179,7 @@
     </div>
 
     <!-- Daftar sumur -->
-    <div class="sidebar-label" style="padding:10px 16px 4px; flex-shrink:0">Daftar Sumur Pantau</div>
+    <div class="sidebar-section" id="ai-section"><div class="sidebar-label">Interpretasi AI</div><div id="ai-text" style="font-size:11px;color:var(--color-text-secondary);line-height:1.7;max-height:200px;overflow-y:auto">Memuat analisis...</div><button onclick="loadAI()" style="margin-top:8px;font-size:11px;padding:4px 10px;border:0.5px solid var(--color-border-secondary);background:transparent;color:var(--color-text-secondary);cursor:pointer;border-radius:6px;width:100%">Perbarui Analisis AI</button></div><div class="sidebar-label" style="padding:10px 16px 4px; flex-shrink:0">Daftar Sumur Pantau</div>
     <div class="sidebar-scroll" id="well-list"></div>
   </div>
 
@@ -582,6 +582,19 @@ async function loadNDVILayer() {
     console.log('NDVI layer error:', e);
   }
 }
+async function loadAI() {
+  const el = document.getElementById("ai-text");
+  el.textContent = "Menganalisis data GRACE + Sentinel-2...";
+  try {
+    const r = await fetch("/api/ai/interpret");
+    const d = await r.json();
+    el.textContent = d.interpretation;
+  } catch(e) {
+    el.textContent = "Gagal memuat analisis. Coba lagi.";
+  }
+}
+window.addEventListener("load", () => setTimeout(loadAI, 3000));
+
 function renderChart(labels, values, depthM) {
   if (chartInstance) { chartInstance.destroy(); chartInstance = null; }
   const ctx = document.getElementById('det-chart').getContext('2d');
