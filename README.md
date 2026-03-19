@@ -127,6 +127,25 @@ docker compose up -d
 
 Open: http://localhost:3000
 
+### Deploy from WSL to VPS
+```bash
+chmod +x scripts/deploy_vps_wsl.sh scripts/smoke_test_live.sh
+
+# Optional overrides:
+# export KEY_PATH=~/awanhehe.pem
+# export HOST=ubuntu@13.236.148.26
+# export LOCAL_DIR=/mnt/c/Users/Administrator/Downloads/ntb-groundwater-fase1
+# export REMOTE_DIR=/home/ubuntu/ntb-groundwater-monitor/ntb-groundwater-monitor
+
+./scripts/deploy_vps_wsl.sh
+```
+
+### Smoke test live deployment
+```bash
+chmod +x scripts/smoke_test_live.sh
+./scripts/smoke_test_live.sh
+```
+
 ### Load NASA GRACE data
 ```bash
 # Install dependencies
