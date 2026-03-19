@@ -894,3 +894,64 @@ async def generate_pdf_report():
         )
     finally:
         await conn.close()
+
+
+# ============================================================
+# ENDPOINT 10: Data Sumur Real ESDM NTB
+# ============================================================
+@app.get("/wells/esdm/geojson")
+async def get_wells_esdm(
+    kabupaten: Optional[str] = Query(None),
+    fungsi: Optional[str] = Query(None)
+):
+    """
+    280 sumur air tanah real dari ESDM NTB / Badan Geologi.
+    Data terverifikasi dengan koordinat GPS lapangan.
+    """
+    conn = await get_db()
+    try:
+        query = """
+            SELECT kode_sumur, fungsi, lat, lon,
+                   dusun, desa, kecamatan, kabupaten,
+                   dibangun_oleh, kedalaman_m, tahun_pembangunan,
+                   ST_AsGeoJSON(geom)::json AS geometry
+            FROM wells_esdm WHERE 1=1
+        """
+        params = []
+        if kabupaten:
+            params.append(f"%{kabupaten}%")
+            query += f" AND LOWER(kabupaten) LIKE LOWER(${len(params)})"
+        if fungsi:
+            params.append(f"%{fungsi}%")
+            query += f" AND LOWER(fungsi) LIKE LOWER(${len(params)})"
+
+        rows = await conn.fetch(query, *params)
+
+        features = [{
+            "type": "Feature",
+            "geometry": json.loads(row["geometry"]) if isinstance(row["geometry"], str) else row["geometry"],
+            "properties": {
+                "kode_sumur": row["kode_sumur"],
+                "fungsi": row["fungsi"],
+                "kecamatan": row["kecamatan"],
+                "kabupaten": row["kabupaten"],
+                "desa": row["desa"],
+                "dibangun_oleh": row["dibangun_oleh"],
+                "kedalaman_m": float(row["kedalaman_m"]) if row["kedalaman_m"] else None,
+                "tahun": int(row["tahun_pembangunan"]) if row["tahun_pembangunan"] else None,
+                "color": "#00d4ff"
+            }
+        } for row in rows]
+
+        return {
+            "type": "FeatureCollection",
+            "metadata": {
+                "title": "Sumur Air Tanah NTB — Data Real ESDM",
+                "source": "Dinas ESDM NTB / Badan Geologi",
+                "total": len(features),
+                "legal": "PP No. 43 Tahun 2008"
+            },
+            "features": features
+        }
+    finally:
+        await conn.close()

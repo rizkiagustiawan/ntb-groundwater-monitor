@@ -286,7 +286,7 @@ map = new maplibregl.Map({
 });
 map.addControl(new maplibregl.NavigationControl(),'top-right');
 map.addControl(new maplibregl.ScaleControl({unit:'metric'}),'bottom-right');
-map.on('load',()=>{loadWells(); setTimeout(loadNDVI,1500); setTimeout(loadGrace,2000); setTimeout(loadESDM,2500);});
+map.on('load',()=>{loadWells(); setTimeout(loadNDVI,1500); setTimeout(loadGrace,2000);});
 
 // LOAD WELLS
 async function loadWells(){
@@ -528,47 +528,6 @@ async function loadAI(){
     else el.textContent='Gagal memuat analisis.';
   }catch{el.textContent='Gagal memuat analisis.';}
 }
-
-async function loadESDM(){
-  try{
-    const r=await fetch(`${API}/wells/esdm/geojson`);
-    if(!r.ok)return;
-    const d=await r.json();
-    if(map.getSource('esdm')){map.getSource('esdm').setData(d);return;}
-    map.addSource('esdm',{type:'geojson',data:d});
-    map.addLayer({id:'esdm-circle',type:'circle',source:'esdm',paint:{
-      'circle-radius':3,
-      'circle-color':'#00d4ff',
-      'circle-opacity':0.8,
-      'circle-stroke-color':'#ffffff',
-      'circle-stroke-width':0.3,
-      'circle-stroke-opacity':0.4
-    }});
-    map.on('click','esdm-circle',e=>{
-      const p=e.features[0].properties;
-      const coords=e.features[0].geometry.coordinates;
-      document.getElementById('detail').classList.add('open');
-      document.getElementById('det-name').textContent=p.kode_sumur+' — '+p.desa;
-      document.getElementById('det-sub').textContent=p.kecamatan+' · '+p.kabupaten;
-      document.getElementById('det-badge').innerHTML='<div class="status-pill" style="background:#00d4ff18;color:#00d4ff;border-color:#00d4ff40;margin-bottom:10px">DATA REAL — ESDM NTB</div>';
-      document.getElementById('det-metrics').innerHTML=`
-        <div class="metric"><span class="metric-k">Kode sumur</span><span class="metric-v">${p.kode_sumur}</span></div>
-        <div class="metric"><span class="metric-k">Fungsi</span><span class="metric-v">${p.fungsi||'–'}</span></div>
-        <div class="metric"><span class="metric-k">Desa</span><span class="metric-v">${p.desa||'–'}</span></div>
-        <div class="metric"><span class="metric-k">Kecamatan</span><span class="metric-v">${p.kecamatan||'–'}</span></div>
-        <div class="metric"><span class="metric-k">Kabupaten</span><span class="metric-v">${p.kabupaten||'–'}</span></div>
-        <div class="metric"><span class="metric-k">Kedalaman</span><span class="metric-v">${p.kedalaman_m?p.kedalaman_m+' m':'–'}</span></div>
-        <div class="metric"><span class="metric-k">Tahun</span><span class="metric-v">${p.tahun||'–'}</span></div>
-        <div class="metric"><span class="metric-k">Dibangun oleh</span><span class="metric-v">${p.dibangun_oleh||'–'}</span></div>`;
-      document.getElementById('det-legal').innerHTML='Data real ESDM NTB / Badan Geologi<br>PP No. 43 Tahun 2008';
-      map.flyTo({center:coords,zoom:Math.max(map.getZoom(),12)});
-    });
-    map.on('mouseenter','esdm-circle',()=>{map.getCanvas().style.cursor='pointer';});
-    map.on('mouseleave','esdm-circle',()=>{map.getCanvas().style.cursor='';});
-    console.log('ESDM loaded:',d.metadata.total,'wells');
-  }catch(e){console.log('ESDM error:',e);}
-}
-
 window.addEventListener('load',()=>setTimeout(loadAI,4000));
 </script>
 </body>
