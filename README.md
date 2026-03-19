@@ -258,3 +258,14 @@ MIT License — see [LICENSE](LICENSE) for details.
 
 *Built from Sumbawa, for Sumbawa.*  
 *Nusa Tenggara Barat, Indonesia*
+
+## Screenshots
+
+### Dashboard Overview
+![Dashboard Overview](docs/dashboard-overview.png)
+
+### Well Detail Panel
+![Well Detail](docs/dashboard-well.png)
+
+### NDVI Sentinel-2 Analysis
+![NDVI Analysis](docs/dashboard-ndvi.png)
