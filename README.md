@@ -115,7 +115,7 @@ First run downloads PostgreSQL + nginx images (~500MB). Wait ~2 minutes.
 
 ### 3. Open dashboard
 ```
-http://localhost:3000
+http://13.236.148.26:3000
 ```
 
 API documentation:
