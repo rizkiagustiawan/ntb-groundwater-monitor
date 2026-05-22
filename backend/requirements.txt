@@ -8,3 +8,4 @@ reportlab==4.2.0
 numpy==2.1.1
 xarray==2024.6.0
 netCDF4==1.7.1
+tqdm==4.66.4

@@ -14,11 +14,17 @@ from datetime import datetime, date
 from typing import Optional
 import math
 
+from app.routers import groundwater, grace, climate
+
 app = FastAPI(
     title="NTB Groundwater Monitoring API",
     description="Platform monitoring air tanah Nusa Tenggara Barat berbasis satelit NASA GRACE dan data lapangan. Referensi: PP 43/2008, Perpres 33/2018.",
     version="1.0.0"
 )
+
+app.include_router(groundwater.router)
+app.include_router(grace.router)
+app.include_router(climate.router)
 
 app.add_middleware(
     CORSMiddleware,
@@ -30,71 +36,6 @@ app.add_middleware(
 DATABASE_URL = os.getenv("DATABASE_URL", "postgresql://rizki:ntb_env_2024@db:5432/ntb_groundwater")
 
 
-NDVI_SPATIAL_ANCHORS = {
-    "Bima": {
-        "lat": -8.4823,
-        "lon": 118.7234,
-        "anchor_name": "Sumur Pantau Raba",
-        "anchor_basis": "Anchor representatif kabupaten",
-        "anchor_source": "Koordinat referensi sumur pantau"
-    },
-    "Dompu": {
-        "lat": -8.5312,
-        "lon": 118.4623,
-        "anchor_name": "Sumur Pantau Dompu Kota",
-        "anchor_basis": "Anchor representatif kabupaten",
-        "anchor_source": "Koordinat referensi sumur pantau"
-    },
-    "Hu u Dompu": {
-        "lat": -8.8923,
-        "lon": 118.2834,
-        "anchor_name": "Sumur Pantau Hu u",
-        "anchor_basis": "Anchor representatif kecamatan",
-        "anchor_source": "Koordinat referensi sumur pantau"
-    },
-    "Lombok Utara": {
-        "lat": -8.3512,
-        "lon": 116.1423,
-        "anchor_name": "Sumur Pantau Tanjung",
-        "anchor_basis": "Anchor representatif kabupaten",
-        "anchor_source": "Koordinat referensi sumur pantau"
-    },
-    "Sekongkang": {
-        "lat": -8.9823,
-        "lon": 116.7012,
-        "anchor_name": "Sumur Pantau Sekongkang",
-        "anchor_basis": "Anchor representatif kecamatan",
-        "anchor_source": "Koordinat referensi sumur pantau"
-    },
-    "Sumbawa Barat": {
-        "lat": -8.8923,
-        "lon": 116.7534,
-        "anchor_name": "Sumur Pantau Maluk",
-        "anchor_basis": "Anchor representatif kabupaten",
-        "anchor_source": "Koordinat referensi sumur pantau"
-    },
-    "Sumbawa Kota": {
-        "lat": -8.4932,
-        "lon": 117.4174,
-        "anchor_name": "Sumur Pantau Sumbawa Kota",
-        "anchor_basis": "Anchor representatif kabupaten",
-        "anchor_source": "Koordinat referensi sumur pantau"
-    },
-    "Taliwang": {
-        "lat": -8.7234,
-        "lon": 116.8523,
-        "anchor_name": "Sumur Pantau Taliwang",
-        "anchor_basis": "Anchor representatif kecamatan",
-        "anchor_source": "Koordinat referensi sumur pantau"
-    },
-    "Tambora": {
-        "lat": -8.2912,
-        "lon": 118.0034,
-        "anchor_name": "Sumur Pantau Tambora",
-        "anchor_basis": "Anchor representatif kawasan",
-        "anchor_source": "Koordinat referensi sumur pantau"
-    }
-}
 
 
 async def get_db():
@@ -126,17 +67,6 @@ def format_period_label(period_value: Optional[date]) -> Optional[str]:
     return period_value.strftime("%Y-%m")
 
 
-def resolve_ndvi_anchor(location: str, fallback_lat: float, fallback_lon: float):
-    anchor = NDVI_SPATIAL_ANCHORS.get(location)
-    if not anchor:
-        return {
-            "lat": fallback_lat,
-            "lon": fallback_lon,
-            "anchor_name": location,
-            "anchor_basis": "Anchor observasi",
-            "anchor_source": "Koordinat fixture Sentinel-2"
-        }
-    return anchor
 
 
 async def get_ndvi_period_range(conn):
@@ -216,22 +146,39 @@ async def get_wells_geojson(
     conn = await get_db()
     try:
         query = """
+            WITH latest_ndvi AS (
+                SELECT DISTINCT ON (location)
+                    location, ndvi, period_date, vegetation_status, geom AS ndvi_geom
+                FROM sentinel2_ndvi
+                ORDER BY location, period_date DESC
+            )
             SELECT
-                id, well_code, name, kecamatan, kabupaten,
-                well_type, depth_m, aquifer_type, status,
-                water_level_m, measured_at, ph, conductivity_us,
-                status_level, geometry
-            FROM well_latest_status
+                wls.id, wls.well_code, wls.name, wls.kecamatan, wls.kabupaten,
+                wls.well_type, wls.depth_m, wls.aquifer_type, wls.status,
+                wls.water_level_m, wls.measured_at, wls.ph, wls.conductivity_us,
+                wls.status_level, wls.geometry,
+                n.location AS ndvi_location,
+                ROUND(n.ndvi::numeric, 3) AS ndvi_value,
+                n.period_date AS ndvi_period,
+                n.vegetation_status AS ndvi_vegetation,
+                ROUND((ST_Distance(w.geom::geography, n.ndvi_geom::geography) / 1000)::numeric, 1) AS ndvi_distance_km
+            FROM well_latest_status wls
+            JOIN wells w ON w.id = wls.id
+            LEFT JOIN LATERAL (
+                SELECT * FROM latest_ndvi
+                ORDER BY ndvi_geom <-> w.geom
+                LIMIT 1
+            ) n ON TRUE
             WHERE 1=1
         """
         params = []
         if kabupaten:
             params.append(kabupaten)
-            query += f" AND LOWER(kabupaten) LIKE LOWER(${ len(params)})"
+            query += f" AND LOWER(wls.kabupaten) LIKE LOWER(${len(params)})"
             params[-1] = f"%{kabupaten}%"
         if status:
             params.append(status)
-            query += f" AND status_level = ${ len(params)}"
+            query += f" AND wls.status_level = ${len(params)}"
 
         rows = await conn.fetch(query, *params)
 
@@ -271,7 +218,15 @@ async def get_wells_geojson(
                         "kritis": "#E24B4A",
                         "sangat_kritis": "#791F1F",
                         "tidak_ada_data": "#888780"
-                    }.get(row["status_level"], "#888780")
+                    }.get(row["status_level"], "#888780"),
+                    # NDVI vegetasi terdekat (Sentinel-2)
+                    "ndvi_value": float(row["ndvi_value"]) if row["ndvi_value"] is not None else None,
+                    "ndvi_location": row["ndvi_location"],
+                    "ndvi_kondisi": classify_ndvi(float(row["ndvi_value"])) if row["ndvi_value"] is not None else None,
+                    "ndvi_color": ndvi_color(classify_ndvi(float(row["ndvi_value"]))) if row["ndvi_value"] is not None else None,
+                    "ndvi_period": format_period_label(row["ndvi_period"]) if row["ndvi_period"] else None,
+                    "ndvi_distance_km": float(row["ndvi_distance_km"]) if row["ndvi_distance_km"] is not None else None,
+                    "ndvi_vegetation": row["ndvi_vegetation"]
                 }
             })
 
@@ -515,80 +470,6 @@ async def health():
 
 
 # ============================================================
-# ENDPOINT 6: GRACE TWS time series NTB (untuk chart dashboard)
-# ============================================================
-@app.get("/grace/timeseries")
-async def get_grace_timeseries(
-    start_year: int = Query(2020, description="Tahun mulai"),
-    end_year: int   = Query(2025, description="Tahun akhir")
-):
-    """
-    Time series rata-rata TWS anomali NTB dari NASA GRACE.
-    Unit: cm equivalent water height (EWH).
-    Referensi: Watkins et al. (2015), doi:10.1002/2014JB011547
-    """
-    conn = await get_db()
-    try:
-        rows = await conn.fetch("""
-            SELECT
-                period_date,
-                ROUND(AVG(tws_anomaly)::numeric, 2) AS avg_tws,
-                ROUND(AVG(uncertainty)::numeric, 2)  AS avg_uncertainty,
-                CASE
-                    WHEN AVG(tws_anomaly) < -2 THEN 'defisit_kritis'
-                    WHEN AVG(tws_anomaly) < 0  THEN 'defisit'
-                    WHEN AVG(tws_anomaly) < 2  THEN 'normal'
-                    ELSE 'surplus'
-                END AS status
-            FROM grace_tws
-            WHERE EXTRACT(YEAR FROM period_date)
-                  BETWEEN $1 AND $2
-            GROUP BY period_date
-            ORDER BY period_date
-        """, start_year, end_year)
-
-        series = [{
-            "period":      row["period_date"].strftime("%Y-%m"),
-            "tws_cm":      float(row["avg_tws"]),
-            "uncertainty": float(row["avg_uncertainty"]),
-            "status":      row["status"],
-            "color": {
-                "defisit_kritis": "#791F1F",
-                "defisit":        "#E24B4A",
-                "normal":         "#BA7517",
-                "surplus":        "#1D9E75"
-            }.get(row["status"], "#888780")
-        } for row in rows]
-
-        # Hitung statistik
-        vals = [s["tws_cm"] for s in series]
-        defisit_months = [s for s in series if "defisit" in s["status"]]
-
-        return {
-            "metadata": {
-                "title":      "GRACE/GRACE-FO TWS Anomaly - NTB",
-                "unit":       "cm equivalent water height (EWH)",
-                "baseline":   "2004-2009 mean",
-                "source":     "NASA GRACE RL06.3 Mascon",
-                "reference":  "Watkins et al. (2015)",
-                "coverage":   "Nusa Tenggara Barat (4x8 grid, 0.5deg resolution)",
-                "period":     f"{start_year}-{end_year}",
-                "usage_note": "Gunakan sebagai indikator regional simpanan air daratan, bukan pengganti muka air sumur lokal."
-            },
-            "statistics": {
-                "mean_tws":       round(sum(vals)/len(vals), 2) if vals else None,
-                "min_tws":        round(min(vals), 2) if vals else None,
-                "max_tws":        round(max(vals), 2) if vals else None,
-                "defisit_months": len(defisit_months),
-                "total_months":   len(series)
-            },
-            "series": series
-        }
-    finally:
-        await conn.close()
-
-
-# ============================================================
 # ENDPOINT 7: NDVI Sentinel-2 per lokasi
 # ============================================================
 @app.get("/ndvi/summary")
@@ -604,13 +485,14 @@ async def get_ndvi_summary():
 
         features = []
         for r in rows:
-            anchor = resolve_ndvi_anchor(r["location"], float(r["lat"]), float(r["lon"]))
+            lat = float(r["lat"])
+            lon = float(r["lon"])
             kondisi = classify_ndvi(float(r["latest_ndvi"]))
             features.append({
                 "type": "Feature",
                 "geometry": {
                     "type": "Point",
-                    "coordinates": [anchor["lon"], anchor["lat"]]
+                    "coordinates": [lon, lat]
                 },
                 "properties": {
                     "location": r["location"],
@@ -621,10 +503,7 @@ async def get_ndvi_summary():
                     "kondisi": kondisi,
                     "n_months": r["n_months"],
                     "latest_period": format_period_label(r["latest_period"]),
-                    "color": ndvi_color(kondisi),
-                    "anchor_name": anchor["anchor_name"],
-                    "anchor_basis": anchor["anchor_basis"],
-                    "anchor_source": anchor["anchor_source"]
+                    "color": ndvi_color(kondisi)
                 }
             })
 
@@ -638,9 +517,7 @@ async def get_ndvi_summary():
                 "latest_snapshot": format_period_label(period_range["max_period"]) if period_range else None,
                 "cloud_filter": "< 30% cloud cover",
                 "resolution": "10 meter",
-                "summary_basis": "Nilai per lokasi memakai observasi terbaru; min/max adalah rentang historis pada seri waktu yang tersedia.",
-                "spatial_note": "Titik NDVI pada peta adalah anchor spasial representatif per lokasi, diselaraskan ke titik referensi monitoring agar tidak memakai koordinat acak.",
-                "groundwater_note": "NDVI merepresentasikan kondisi vegetasi di sekitar anchor, bukan pembacaan langsung muka air tanah."
+                "summary_basis": "Nilai per lokasi memakai observasi terbaru; min/max adalah rentang historis pada seri waktu yang tersedia."
             },
             "features": features
         }
@@ -687,17 +564,31 @@ import os
 async def ai_interpret_ntb():
     """
     Interpretasi otomatis kondisi air tanah NTB menggunakan AI.
-    Menggabungkan data GRACE TWS + NDVI Sentinel-2 + status sumur.
+    Menggabungkan data GWS (TWS - SMS) + Curah Hujan + NDVI + status sumur.
     """
     conn = await get_db()
     try:
-        # Ambil data terbaru GRACE
-        grace_rows = await conn.fetch("""
-            SELECT period_date,
-                   ROUND(AVG(tws_anomaly)::numeric, 2) AS avg_tws
-            FROM grace_tws
-            GROUP BY period_date
-            ORDER BY period_date DESC
+        # Ambil data terbaru GWS (TWS - SMS)
+        gws_rows = await conn.fetch("""
+            SELECT t.period_date,
+                   ROUND(AVG(t.tws_anomaly - COALESCE(s.sms_anomaly, 0))::numeric, 2) AS avg_gws
+            FROM grace_tws t
+            LEFT JOIN gldas_sms s ON 
+                EXTRACT(YEAR FROM t.period_date) = s.year AND 
+                EXTRACT(MONTH FROM t.period_date) = s.month AND
+                ABS(t.lat - s.lat) < 0.01 AND 
+                ABS(t.lon - s.lon) < 0.01
+            GROUP BY t.period_date
+            ORDER BY t.period_date DESC
+            LIMIT 6
+        """)
+
+        # Ambil data curah hujan terbaru
+        rain_rows = await conn.fetch("""
+            SELECT year, month, ROUND(AVG(precip_mm)::numeric, 2) as avg_precip
+            FROM chirps_precip
+            GROUP BY year, month
+            ORDER BY year DESC, month DESC
             LIMIT 6
         """)
 
@@ -715,9 +606,14 @@ async def ai_interpret_ntb():
         """)
 
         # Susun konteks data untuk AI
-        grace_summary = "\n".join([
-            f"  {r['period_date'].strftime('%Y-%m')}: {r['avg_tws']:+.2f} cm EWH"
-            for r in grace_rows
+        gws_summary = "\n".join([
+            f"  {r['period_date'].strftime('%Y-%m')}: {r['avg_gws']:+.2f} cm EWH"
+            for r in gws_rows
+        ])
+
+        rain_summary = "\n".join([
+            f"  {r['year']}-{r['month']:02d}: {float(r['avg_precip']):.1f} mm"
+            for r in rain_rows
         ])
 
         ndvi_summary = "\n".join([
@@ -734,25 +630,28 @@ async def ai_interpret_ntb():
 
 Berikut adalah data monitoring air tanah Nusa Tenggara Barat (NTB) terkini:
 
-DATA NASA GRACE - Anomali Terrestrial Water Storage regional (6 bulan terakhir):
-{grace_summary}
-(Nilai negatif = defisit simpanan air daratan regional dibanding baseline 2004-2009. Ini bukan pembacaan langsung muka air sumur.)
+DATA NASA GRACE + GLDAS - Anomali Groundwater Storage (GWS) regional (6 bulan terakhir):
+{gws_summary}
+(GWS = TWS - Soil Moisture. Nilai negatif = defisit simpanan air tanah regional.)
+
+DATA CURAH HUJAN CHIRPS (6 bulan terakhir):
+{rain_summary}
+(Gunakan untuk melihat apakah defisit air tanah sejalan dengan kurangnya hujan atau indikasi pemompaan berlebih.)
 
 DATA SENTINEL-2 NDVI - Snapshot vegetasi terbaru (5 lokasi paling kritis):
 {ndvi_summary}
-(NDVI < 0.2 = vegetasi sangat jarang/lahan kritis)
 
 STATUS SUMUR PANTAU:
 {well_summary}
 
 Berikan interpretasi komprehensif dalam Bahasa Indonesia (maksimal 200 kata) yang mencakup:
-1. Kondisi simpanan air daratan regional NTB saat ini berdasarkan GRACE
-2. Hubungan indikatif antara kondisi vegetasi dan potensi tekanan sumber daya air
+1. Kondisi simpanan air tanah (GWS) regional NTB saat ini sehubungan dengan curah hujan
+2. Hubungan indikatif antara kondisi vegetasi dan potensi tekanan sumber daya air tanah
 3. Kabupaten/area yang paling memerlukan perhatian segera
-4. Rekomendasi tindakan prioritas untuk Dinas ESDM NTB
+4. Analisis potensi pengaruh antropogenik (jika hujan normal tapi GWS turun tajam)
+5. Rekomendasi tindakan prioritas untuk Dinas ESDM NTB.
 
-Gunakan bahasa yang dapat dipahami oleh pejabat pemerintah daerah, bukan hanya ilmuwan.
-Referensikan PP No. 43 Tahun 2008 tentang Pengelolaan Air Tanah jika relevan."""
+Referensikan PP No. 43 Tahun 2008."""
 
         # Call Kimi API
         kimi = KimiClient(
@@ -772,6 +671,8 @@ Referensikan PP No. 43 Tahun 2008 tentang Pengelolaan Air Tanah jika relevan."""
             "generated_at": datetime.now().isoformat(),
             "data_sources": [
                 "NASA GRACE RL06.3 Mascon",
+                "NASA GLDAS Noah 2.1",
+                "UCSB-CHG CHIRPS",
                 "Copernicus Sentinel-2 MSI",
                 "Data Sumur Pantau NTB"
             ],
@@ -779,10 +680,10 @@ Referensikan PP No. 43 Tahun 2008 tentang Pengelolaan Air Tanah jika relevan."""
             "ai_model": "moonshot-v1-8k",
             "interpretation": interpretation,
             "raw_data": {
-                "grace_6months": [
+                "gws_6months": [
                     {"period": r['period_date'].strftime('%Y-%m'),
-                     "tws_cm": float(r['avg_tws'])}
-                    for r in grace_rows
+                     "gws_cm": float(r['avg_gws'])}
+                    for r in gws_rows
                 ],
                 "ndvi_critical": [
                     {"location": r['location'],
@@ -815,11 +716,20 @@ async def generate_pdf_report():
     """Generate laporan PDF monitoring air tanah NTB."""
     conn = await get_db()
     try:
-        # Ambil data
-        grace_rows = await conn.fetch("""
-            SELECT period_date, ROUND(AVG(tws_anomaly)::numeric, 2) AS avg_tws
-            FROM grace_tws GROUP BY period_date
-            ORDER BY period_date DESC LIMIT 6
+        # Ambil data terbaru TWS & GWS
+        gws_rows = await conn.fetch("""
+            SELECT t.period_date,
+                   ROUND(AVG(t.tws_anomaly)::numeric, 2) AS avg_tws,
+                   ROUND(AVG(t.tws_anomaly - COALESCE(s.sms_anomaly, 0))::numeric, 2) AS avg_gws
+            FROM grace_tws t
+            LEFT JOIN gldas_sms s ON
+                EXTRACT(YEAR FROM t.period_date) = s.year AND
+                EXTRACT(MONTH FROM t.period_date) = s.month AND
+                ABS(t.lat - s.lat) < 0.01 AND
+                ABS(t.lon - s.lon) < 0.01
+            GROUP BY t.period_date
+            ORDER BY t.period_date DESC
+            LIMIT 6
         """)
         ndvi_rows = await get_latest_ndvi_rows(conn, ascending=True)
         kab_rows = await conn.fetch("""
@@ -836,9 +746,11 @@ async def generate_pdf_report():
             model="moonshot-v1-8k",
             messages=[{"role":"user","content":
                 f"Buat ringkasan eksekutif kondisi sumber daya air NTB dalam 2 paragraf singkat. "
-                f"Data: TWS regional terkini {float(grace_rows[0]['avg_tws'])} cm EWH, "
+                f"Data: Anomali simpanan air tanah (GWS) regional terkini {float(gws_rows[0]['avg_gws'])} cm EWH, "
+                f"Anomali TWS (Total Water Storage) {float(gws_rows[0]['avg_tws'])} cm EWH. "
                 f"{sum(r['kritis'] or 0 for r in kab_rows)} sumur kritis. "
-                f"Tegaskan bahwa GRACE adalah indikator regional, bukan pembacaan langsung muka air sumur. "
+                f"GWS dihitung dengan formula Rodell et al. (2009): GWS = TWS - Soil Moisture. "
+                f"Tegaskan bahwa GWS satelit adalah indikator regional, bukan pembacaan langsung muka air sumur. "
                 f"Bahasa formal untuk laporan pemerintah. Referensi PP 43/2008."}],
             temperature=0.3
         )
@@ -877,7 +789,7 @@ async def generate_pdf_report():
         ],[
             Paragraph('Nusa Tenggara Barat · NTB Groundwater Monitor', sub_style),
         ],[
-            Paragraph(f'PP No. 43/2008 · NASA GRACE RL06.3 · Sentinel-2 MSI · {now_str}', sub_style),
+            Paragraph(f'PP No. 43/2008 · NASA GRACE/GLDAS · Sentinel-2 MSI · {now_str}', sub_style),
         ]]
         header_tbl = Table(header_data, colWidths=[17*cm])
         header_tbl.setStyle(TableStyle([
@@ -893,13 +805,13 @@ async def generate_pdf_report():
         # Stats row
         total_w   = sum(r['total'] for r in kab_rows)
         total_k   = sum(r['kritis'] or 0 for r in kab_rows)
-        latest_tws = float(grace_rows[0]['avg_tws'])
+        latest_gws = float(gws_rows[0]['avg_gws'])
         ndvi_k    = sum(1 for r in ndvi_rows if float(r['latest_ndvi']) < 0.1)
 
         stats_data = [
             [Paragraph(f'<b>{total_w}</b><br/>Total Sumur', body_style),
              Paragraph(f'<b><font color="#E24B4A">{total_k}</font></b><br/>Sumur Kritis', body_style),
-             Paragraph(f'<b><font color="{"#1D9E75" if latest_tws > 0 else "#E24B4A"}">{latest_tws:+.2f} cm</font></b><br/>TWS GRACE Terkini', body_style),
+             Paragraph(f'<b><font color="{"#1D9E75" if latest_gws > 0 else "#E24B4A"}">{latest_gws:+.2f} cm</font></b><br/>GWS (Air Tanah)', body_style),
              Paragraph(f'<b><font color="#E24B4A">{ndvi_k}</font></b><br/>Area NDVI Kritis', body_style)]
         ]
         stats_tbl = Table(stats_data, colWidths=[4.25*cm]*4)
@@ -922,19 +834,20 @@ async def generate_pdf_report():
                 story.append(Paragraph(para.strip(), body_style))
         story.append(Spacer(1, 0.3*cm))
 
-        # GRACE table
-        story.append(Paragraph('Data NASA GRACE - Anomali TWS Regional 6 Bulan Terakhir', h2_style))
-        grace_table_data = [['Periode', 'Anomali TWS (cm EWH)', 'Status']]
-        for r in grace_rows:
-            tws = float(r['avg_tws'])
-            status = 'Surplus' if tws > 2 else 'Normal' if tws > 0 else 'Defisit'
-            color = '#1D9E75' if tws > 0 else '#E24B4A'
-            grace_table_data.append([
+        # GWS table
+        story.append(Paragraph('Anomali Groundwater Storage (GWS) - 6 Bulan Terakhir', h2_style))
+        story.append(Paragraph('Formula: GWS = TWS (GRACE) - SMS (Soil Moisture GLDAS). Baseline: 2004-2009 mean.', small_style))
+        gws_table_data = [['Periode', 'Anomali GWS (cm EWH)', 'Status']]
+        for r in gws_rows:
+            gws = float(r['avg_gws'])
+            status = 'Surplus' if gws > 2 else 'Normal' if gws > 0 else 'Defisit'
+            color = '#1D9E75' if gws > 0 else '#E24B4A'
+            gws_table_data.append([
                 r['period_date'].strftime('%B %Y'),
-                Paragraph(f'<font color="{color}"><b>{tws:+.2f}</b></font>', body_style),
+                Paragraph(f'<font color="{color}"><b>{gws:+.2f}</b></font>', body_style),
                 status
             ])
-        gt = Table(grace_table_data, colWidths=[6*cm, 6*cm, 5*cm])
+        gt = Table(gws_table_data, colWidths=[6*cm, 6*cm, 5*cm])
         gt.setStyle(TableStyle([
             ('BACKGROUND', (0,0), (-1,0), BLUE),
             ('TEXTCOLOR', (0,0), (-1,0), white),
@@ -1004,11 +917,9 @@ async def generate_pdf_report():
         story.append(Spacer(1, 0.4*cm))
 
         # Legal footer
-        legal = ('Dasar Hukum: PP No. 43 Tahun 2008 · Perpres No. 33 Tahun 2018 · '
-                 'PerMenLHK P.68/2016 · SNI 6989.58:2008 | '
-                 'Metodologi: NDVI = (B8-B4)/(B8+B4) Rouse et al. (1974) · '
-                 'TWS = NASA GRACE RL06.3 Mascon Watkins et al. (2015), indikator regional simpanan air daratan | '
-                 'Disclaimer: Laporan ini dihasilkan otomatis. Keputusan kebijakan harus dikonfirmasi pengukuran lapangan.')
+        legal = ('Dasar Hukum: PP No. 43 Tahun 2008 · Perpres No. 33 Tahun 2018 | '
+                 'Metodologi: GWS = TWS (GRACE) - SMS (GLDAS Noah 2.1). Rodell et al. (2009) doi:10.1038/nature08232 | '
+                 'Disclaimer: Laporan ini berupa estimasi regional (resolusi ~55 km). Keputusan kebijakan harus dikonfirmasi pengukuran lapangan.')
         story.append(Paragraph(legal, small_style))
 
         doc.build(story)
@@ -1039,19 +950,36 @@ async def get_wells_esdm(
     conn = await get_db()
     try:
         query = """
-            SELECT kode_sumur, fungsi, lat, lon,
-                   dusun, desa, kecamatan, kabupaten,
-                   dibangun_oleh, kedalaman_m, tahun_pembangunan,
-                   ST_AsGeoJSON(geom)::json AS geometry
-            FROM wells_esdm WHERE 1=1
+            WITH latest_ndvi AS (
+                SELECT DISTINCT ON (location)
+                    location, ndvi, period_date, vegetation_status, geom AS ndvi_geom
+                FROM sentinel2_ndvi
+                ORDER BY location, period_date DESC
+            )
+            SELECT we.kode_sumur, we.fungsi, we.lat, we.lon,
+                   we.dusun, we.desa, we.kecamatan, we.kabupaten,
+                   we.dibangun_oleh, we.kedalaman_m, we.tahun_pembangunan,
+                   ST_AsGeoJSON(we.geom)::json AS geometry,
+                   n.location AS ndvi_location,
+                   ROUND(n.ndvi::numeric, 3) AS ndvi_value,
+                   n.period_date AS ndvi_period,
+                   n.vegetation_status AS ndvi_vegetation,
+                   ROUND((ST_Distance(we.geom::geography, n.ndvi_geom::geography) / 1000)::numeric, 1) AS ndvi_distance_km
+            FROM wells_esdm we
+            LEFT JOIN LATERAL (
+                SELECT * FROM latest_ndvi
+                ORDER BY ndvi_geom <-> we.geom
+                LIMIT 1
+            ) n ON TRUE
+            WHERE 1=1
         """
         params = []
         if kabupaten:
             params.append(f"%{kabupaten}%")
-            query += f" AND LOWER(kabupaten) LIKE LOWER(${len(params)})"
+            query += f" AND LOWER(we.kabupaten) LIKE LOWER(${len(params)})"
         if fungsi:
             params.append(f"%{fungsi}%")
-            query += f" AND LOWER(fungsi) LIKE LOWER(${len(params)})"
+            query += f" AND LOWER(we.fungsi) LIKE LOWER(${len(params)})"
 
         rows = await conn.fetch(query, *params)
 
@@ -1067,7 +995,15 @@ async def get_wells_esdm(
                 "dibangun_oleh": row["dibangun_oleh"],
                 "kedalaman_m": float(row["kedalaman_m"]) if row["kedalaman_m"] else None,
                 "tahun": int(row["tahun_pembangunan"]) if row["tahun_pembangunan"] else None,
-                "color": "#00d4ff"
+                "color": "#00d4ff",
+                # NDVI vegetasi terdekat (Sentinel-2)
+                "ndvi_value": float(row["ndvi_value"]) if row["ndvi_value"] is not None else None,
+                "ndvi_location": row["ndvi_location"],
+                "ndvi_kondisi": classify_ndvi(float(row["ndvi_value"])) if row["ndvi_value"] is not None else None,
+                "ndvi_color": ndvi_color(classify_ndvi(float(row["ndvi_value"]))) if row["ndvi_value"] is not None else None,
+                "ndvi_period": format_period_label(row["ndvi_period"]) if row["ndvi_period"] else None,
+                "ndvi_distance_km": float(row["ndvi_distance_km"]) if row["ndvi_distance_km"] is not None else None,
+                "ndvi_vegetation": row["ndvi_vegetation"]
             }
         } for row in rows]
 

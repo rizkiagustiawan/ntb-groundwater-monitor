@@ -32,7 +32,7 @@ This platform is a production proof-of-concept for satellite-based environmental
 Features visible in demo:
 - 280 monitoring wells across Sumbawa, Dompu, Bima, Lombok Utara — color-coded by water table status
 - NASA GRACE TWS anomaly bar chart (2020–2025) — December 2023 El Niño deficit clearly visible
-- Sentinel-2 NDVI rings — vegetation condition per location
+- Sentinel-2 NDVI integration — vegetation condition mapped directly to each well
 - AI interpretation panel in Bahasa Indonesia (Kimi moonshot-v1-8k)
 - One-click PDF report download with legal references
 

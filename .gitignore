@@ -1,7 +1,8 @@
 # Data satelit - terlalu besar untuk GitHub (200MB+)
 data/grace/*.nc
-data/sentinel/
+data/sentinel2/*
 !data/grace/GRCTellus.JPL.200204_202512.GLO.RL06.3M.MSCNv04CRI.nc
+!data/sentinel2/ntb_ndvi_timeseries.csv
 
 # Python
 __pycache__/
@@ -16,3 +17,10 @@ pgdata/
 # OS
 .DS_Store
 Thumbs.db
+
+# Temporary/IDE
+.antigravitycli/
+
+# GLDAS NetCDF
+backend/data/gldas/*.nc4
+data/gldas/*.nc4
