@@ -2,7 +2,7 @@
 
 > Satellite-based groundwater monitoring platform for Nusa Tenggara Barat, Indonesia
 
-**Live Demo:** http://13.236.148.26:3000 | **API Docs:** http://13.236.148.26:8000/docs
+**Live Demo:** http://13.236.148.26:3000 | **API Docs:** https://gw.rizkiagustiawan.tech/api/docs
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 [![Legal](https://img.shields.io/badge/Legal-PP%2043%2F2008-blue)](https://peraturan.bpk.go.id)
@@ -27,10 +27,10 @@ This platform is a production proof-of-concept for satellite-based environmental
 ## Live Demo
 
 **Dashboard:** http://13.236.148.26:3000  
-**API:** http://13.236.148.26:8000/docs
+**API:** https://gw.rizkiagustiawan.tech/api/docs
 
 Features visible in demo:
-- 23 monitoring wells across Sumbawa, Dompu, Bima, Lombok Utara — color-coded by water table status
+- 280 monitoring wells across Sumbawa, Dompu, Bima, Lombok Utara — color-coded by water table status
 - NASA GRACE TWS anomaly bar chart (2020–2025) — December 2023 El Niño deficit clearly visible
 - Sentinel-2 NDVI rings — vegetation condition per location
 - AI interpretation panel in Bahasa Indonesia (Kimi moonshot-v1-8k)
@@ -168,6 +168,21 @@ podaac-data-downloader \
 python scripts/grace_to_postgis.py
 ```
 
+### Load NASA GLDAS data
+```bash
+# Setup NASA Earthdata token in .env
+# EARTHDATA_TOKEN=eyJ0eXAiOi...
+
+# Download GLDAS data (Baseline & Current)
+docker compose exec api python3 /scripts/download_gldas.py --baseline --current
+
+# Process into PostGIS
+docker compose exec api python3 /scripts/gldas_to_postgis.py
+
+# Alternatively, ingest from a GEE CSV export
+docker compose exec api python3 /scripts/gldas_to_postgis.py --input /data/gee_export.csv
+```
+
 ### Bootstrap database from repo assets
 This repo now includes:
 - `data/grace/GRCTellus.JPL.200204_202512.GLO.RL06.3M.MSCNv04CRI.nc` for GRACE loading
@@ -200,15 +215,27 @@ The bootstrap script will populate:
 | `GET /ndvi/timeseries/{location}` | NDVI time series per location |
 | `GET /ai/interpret` | AI-powered interpretation in Bahasa Indonesia |
 | `GET /report/pdf` | Download PDF monitoring report |
+| `GET /groundwater/timeseries` | Monthly GWS anomaly (TWS - SMS) |
 | `GET /health` | Service health check |
 
-Full interactive docs: http://13.236.148.26:8000/docs
+Full interactive docs: https://gw.rizkiagustiawan.tech/api/docs
+
+## Metodologi Ilmiah
+
+Platform ini mengimplementasikan pemisahan komponen Terrestrial Water Storage (TWS) sesuai hukum fisika hidrologi (Rodell et al., 2009):
+
+**GWS_anomaly = TWS_anomaly (GRACE) - SMS_anomaly (GLDAS) - SWS_anomaly**
+
+1.  **GRACE TWS:** Liquid Water Equivalent Thickness dari NASA JPL Mascon RL06.3.
+2.  **GLDAS SMS:** Soil Moisture Storage dari Noah 2.1 model (Root Zone Soil Moisture).
+3.  **Baseline:** Seluruh anomali dihitung relatif terhadap rata-rata periode **2004-2009**.
+4.  **Validasi:** Data anomali regional disandingkan dengan pengukuran sumur pantau ESDM di lapangan.
 
 ---
 
 ## Data Coverage
 ```
-Monitoring Wells (23 wells across 6 kabupaten/kota):
+Monitoring Wells (280 wells across NTB — Source: ESDM NTB):
 ├── Kab. Sumbawa        8 wells  SMB-001 to SMB-008
 ├── Kab. Sumbawa Barat  3 wells  KSB-001 to KSB-003
 ├── Kab. Dompu          3 wells  DMP-001 to DMP-003
@@ -268,11 +295,13 @@ Wiese et al. (2016). doi:10.1002/2016GL070571
 
 ## Roadmap
 
-- [ ] Custom domain + HTTPS (SSL via Let's Encrypt)
+- [x] Custom domain + HTTPS (gw.rizkiagustiawan.tech)
+- [x] GWS scientific correction — GWS = TWS − SMS (Rodell et al. 2009)
+- [x] GLDAS Noah 2.1 soil moisture integration (576 records, baseline 2004-2009)
+- [x] 280 ESDM NTB monitoring wells
 - [ ] BMKG rainfall data integration
 - [ ] Drought early warning system
 - [ ] Mobile responsive UI
-- [ ] Real well data from Dinas ESDM NTB
 - [ ] Sentinel-1 SAR for land subsidence detection
 - [ ] TROPOMI air quality layer
 
@@ -306,3 +335,4 @@ MIT License — see [LICENSE](LICENSE) for details.
 
 ### NDVI Sentinel-2 Analysis
 ![NDVI Analysis](docs/dashboard-ndvi.png)
+hboard-ndvi.png)
