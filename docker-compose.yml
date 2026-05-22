@@ -35,7 +35,7 @@ services:
   frontend:
     image: nginx:alpine
     ports:
-      - "3000:80"
+      - "3003:80"
     volumes:
       - ./frontend:/usr/share/nginx/html:ro
       - ./frontend/proxy.conf:/etc/nginx/conf.d/proxy.conf:ro
