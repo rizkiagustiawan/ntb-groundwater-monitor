@@ -195,6 +195,7 @@ select:focus{border-color:var(--accent)}
     <span class="badge">NASA GRACE (GWS)</span>
     <span class="badge">SENTINEL-2 (NDVI)</span>
     <span class="badge">BMKG RAIN</span>
+    <span class="badge">SAR SUBSIDENCE</span>
   </div>
   <div class="topbar-right">
     <button class="btn-pdf" onclick="window.open('/api/report/pdf','_blank')">Download Laporan PDF</button>
@@ -361,7 +362,7 @@ map = new maplibregl.Map({
 map.addControl(new maplibregl.NavigationControl(),'top-right');
 map.addControl(new maplibregl.ScaleControl({unit:'metric'}),'bottom-right');
 
-map.on('load',()=>{loadWells(); loadESDM(); setTimeout(loadGrace,1500);});
+map.on('load',()=>{loadWells(); loadESDM(); setTimeout(loadGrace,1500); setTimeout(loadSAR,3000);});
 
 // LOAD ACTIVE MONITORING WELLS (23 sites with measurements)
 async function loadWells(){
@@ -445,6 +446,31 @@ async function loadESDM(){
       selectWell(p.kode_sumur,[parseFloat(c[0]),parseFloat(c[1])], false);
     });
   }catch(e){console.log('ESDM error:',e);}
+}
+
+// LOAD SAR SUBSIDENCE LAYER
+async function loadSAR(){
+  try{
+    const r=await fetch(`${API}/sar/geojson`);
+    if(!r.ok)return;
+    const d=await r.json();
+    if(map.getSource('sar')){map.getSource('sar').setData(d);return;}
+    map.addSource('sar',{type:'geojson',data:d});
+    map.addLayer({
+      id:'sar-circle',type:'circle',source:'sar',
+      paint:{
+        'circle-radius':6,
+        'circle-color':['get','color'],
+        'circle-opacity':0.7,
+        'circle-stroke-color':'#ffffff',
+        'circle-stroke-width':1
+      }
+    }, 'active-glow');
+    map.on('click','sar-circle',e=>{
+      const p=e.features[0].properties;
+      alert(`Subsidence: ${p.location}\nRate: ${p.rate_mm_year} mm/year`);
+    });
+  }catch(e){console.log('SAR error:',e);}
 }
 
 function updateStats(features){
