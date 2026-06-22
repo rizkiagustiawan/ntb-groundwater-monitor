@@ -194,6 +194,7 @@ select:focus{border-color:var(--accent)}
     <span class="badge">280 ESDM WELLS</span>
     <span class="badge">NASA GRACE (GWS)</span>
     <span class="badge">SENTINEL-2 (NDVI)</span>
+    <span class="badge">BMKG RAIN</span>
   </div>
   <div class="topbar-right">
     <button class="btn-pdf" onclick="window.open('/api/report/pdf','_blank')">Download Laporan PDF</button>
@@ -289,6 +290,8 @@ select:focus{border-color:var(--accent)}
       <div class="chart-wrap" id="det-chart-wrap"><canvas id="det-chart"></canvas></div>
       <div class="chart-label" id="ndvi-chart-label" style="display:none">NDVI Vegetasi Terdekat</div>
       <div class="chart-wrap" id="ndvi-chart-wrap" style="display:none"><canvas id="ndvi-chart"></canvas></div>
+      <div class="chart-label" id="bmkg-chart-label" style="display:none">Curah Hujan BMKG</div>
+      <div class="chart-wrap" id="bmkg-chart-wrap" style="display:none"><canvas id="bmkg-chart"></canvas></div>
       <div class="legal-note" id="det-legal"></div>
     </div>
   </div>
@@ -673,6 +676,48 @@ function renderDetChart(labels,values,opts={}){
 }
 
 // NDVI data is now integrated into well endpoints via spatial join
+
+// BMKG RAINFALL CHART
+let bmkgChartInst = null;
+
+async function loadBMKGRainfall(stationId) {
+  if (!stationId) return;
+  try {
+    const r = await fetch(`${API}/bmkg/rainfall/timeseries?station_id=${stationId}&months=12`);
+    if (!r.ok) return;
+    const d = await r.json();
+    if (!d.series || !d.series.length) return;
+    
+    document.getElementById('bmkg-chart-label').textContent = `Curah Hujan BMKG — ${stationId}`;
+    document.getElementById('bmkg-chart-label').style.display = 'block';
+    document.getElementById('bmkg-chart-wrap').style.display = 'block';
+    
+    if (bmkgChartInst) { bmkgChartInst.destroy(); bmkgChartInst = null; }
+    const ctx = document.getElementById('bmkg-chart').getContext('2d');
+    bmkgChartInst = new Chart(ctx, {
+      type: 'bar',
+      data: {
+        labels: d.series.map(s => s.period),
+        datasets: [{
+          label: 'Curah Hujan (mm)',
+          data: d.series.map(s => s.total_precip_mm),
+          backgroundColor: 'rgba(59,130,246,0.6)',
+          borderColor: '#3b82f6',
+          borderWidth: 1,
+          borderRadius: 2
+        }]
+      },
+      options: {
+        responsive: true, maintainAspectRatio: false,
+        plugins: { legend: { display: false } },
+        scales: {
+          x: { ticks: { color: '#4a5568', font: { size: 9 } }, grid: { color: '#1a2438' } },
+          y: { ticks: { color: '#4a5568', font: { size: 9 }, callback: v => v + ' mm' }, grid: { color: '#1a2438' } }
+        }
+      }
+    });
+  } catch (e) { console.log('BMKG chart error:', e); }
+}
 
 // GRACE CHART
 async function loadGrace(){
