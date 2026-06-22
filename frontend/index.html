@@ -196,6 +196,9 @@ select:focus{border-color:var(--accent)}
     <span class="badge">SENTINEL-2 (NDVI)</span>
     <span class="badge">BMKG RAIN</span>
     <span class="badge">SAR SUBSIDENCE</span>
+    <span class="badge">CHIRPS PRECIP</span>
+    <span class="badge">DROUGHT EWS</span>
+    <span class="badge">ENSO</span>
   </div>
   <div class="topbar-right">
     <button class="btn-pdf" onclick="window.open('/api/report/pdf','_blank')">Download Laporan PDF</button>
@@ -263,6 +266,16 @@ select:focus{border-color:var(--accent)}
       <div class="science-note">
         Layer GRACE menampilkan estimasi anomali air tanah (GWS) skala regional (~55 km). Status sumur pantau didasarkan pada pengukuran real-time/lapangan muka air tanah (MAT).
       </div>
+    </div>
+
+    <div class="ai-section">
+      <div class="ai-label" style="color:#f59e0b">Drought Early Warning</div>
+      <div class="ai-text" id="drought-status">Memuat status kekeringan...</div>
+    </div>
+
+    <div class="ai-section">
+      <div class="ai-label" style="color:#3b82f6">ENSO Status</div>
+      <div class="ai-text" id="enso-status">Memuat status ENSO...</div>
     </div>
 
     <div class="ai-section">
@@ -802,7 +815,7 @@ async function loadFusionTimeseries(lat, lon) {
   } catch (e) { console.log('Fusion chart error:', e); }
 }
 
-// GRACE CHART
+// GRACE CHART (with uncertainty)
 async function loadGrace(){
   try{
     const r=await fetch(`${API}/groundwater/timeseries?start_year=2020&end_year=2025`);
@@ -833,10 +846,12 @@ async function loadGrace(){
             callbacks:{
               label: (c) => {
                 const s = d.data[c.dataIndex];
-                return [
-                  `GWS Anomaly: ${s.gws_anomaly.toFixed(2)} cm`,
-                  `TWS Anomaly: ${s.tws_anomaly.toFixed(2)} cm`
+                const lines = [
+                  `GWS: ${s.gws_anomaly.toFixed(2)} ± ${(s.gws_uncertainty||0).toFixed(2)} cm EWH`,
+                  `TWS: ${s.tws_anomaly.toFixed(2)} cm`,
                 ];
+                if(s.sms_anomaly!==undefined) lines.push(`SMS: ${s.sms_anomaly.toFixed(2)} cm`);
+                return lines;
               }
             }
           }
@@ -861,7 +876,41 @@ async function loadAI(){
   }catch{el.textContent='Gagal memuat analisis.';}
 }
 
-window.addEventListener('load',()=>setTimeout(loadAI,4000));
+// DROUGHT STATUS
+async function loadDroughtStatus(){
+  const el=document.getElementById('drought-status');
+  try{
+    const r=await fetch(`${API}/drought/status`);
+    if(r.ok){
+      const d=await r.json();
+      const status=d.overall_status||'UNKNOWN';
+      const color={NORMAL:'#10b981',WASPADA:'#f59e0b',KRITIS:'#ef4444',SANGAT_KRITIS:'#7f1d1d'}[status]||'#4a5568';
+      const labels={NORMAL:'Normal',WASPADA:'Waspada',KRITIS:'Kritis',SANGAT_KRITIS:'Sangat Kritis'}[status]||status;
+      el.innerHTML=`<span style="color:${color};font-weight:600">${labels}</span> — SPI: ${d.spi_value||'N/A'}`;
+    }else el.textContent='Data kekeringan tidak tersedia.';
+  }catch{el.textContent='Gagal memuat status kekeringan.';}
+}
+
+// ENSO STATUS
+async function loadEnsoStatus(){
+  const el=document.getElementById('enso-status');
+  try{
+    const r=await fetch(`${API}/enso/status`);
+    if(r.ok){
+      const d=await r.json();
+      const status=d.status||'Neutral';
+      const color={Neutral:'#4a5568','El Niño likely':'#ef4444','La Niña likely':'#3b82f6'}[status]||'#4a5568';
+      el.innerHTML=`<span style="color:${color};font-weight:600">${status}</span>`;
+    }else el.textContent='Data ENSO tidak tersedia.';
+  }catch{el.textContent='Gagal memuat status ENSO.';}
+}
+
+window.addEventListener('load',()=>{
+  setTimeout(loadAI,4000);
+  setTimeout(loadDroughtStatus,2000);
+  setTimeout(loadEnsoStatus,2500);
+});
 </script>
+
 </body>
 </html>
