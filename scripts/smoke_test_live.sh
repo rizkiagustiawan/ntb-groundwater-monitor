@@ -69,4 +69,23 @@ try:
         check("pdf_export", resp.status == 200 and "application/pdf" in content_type, f"status={resp.status} content_type={content_type}")
 except Exception as exc:
     check("pdf_export", False, str(exc))
+
+# Phase 1: New endpoints
+try:
+    bmkg_stations = fetch_json("/api/bmkg/stations")
+    check("bmkg_stations", "stations" in bmkg_stations, f"total={bmkg_stations.get('total_stations')}")
+except Exception as exc:
+    check("bmkg_stations", False, str(exc))
+
+try:
+    sar_summary = fetch_json("/api/sar/summary")
+    check("sar_summary", "data" in sar_summary, f"source={sar_summary.get('source')}")
+except Exception as exc:
+    check("sar_summary", False, str(exc))
+
+try:
+    fusion_summary = fetch_json("/api/fusion/summary")
+    check("fusion_summary", "source" in fusion_summary, f"source={fusion_summary.get('source')}")
+except Exception as exc:
+    check("fusion_summary", False, str(exc))
 PY
