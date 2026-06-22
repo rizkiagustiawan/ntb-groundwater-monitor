@@ -24,6 +24,9 @@ from app.routers.chirps import router as chirps_router
 from app.routers.anthropogenic import router as anthropogenic_router
 from app.routers.enso import router as enso_router
 from app.routers.validation import router as validation_router
+from app.routers.downscale import router as downscale_router
+from app.routers.potential import router as potential_router
+from app.routers.gldas_ensemble import router as gldas_ensemble_router
 
 ALLOWED_ORIGINS = os.getenv(
     "CORS_ORIGINS",
@@ -60,6 +63,7 @@ app.include_router(chirps_router)
 app.include_router(anthropogenic_router)
 app.include_router(enso_router)
 app.include_router(validation_router)
+app.include_router(gldas_ensemble_router)
 
 
 @app.get("/")
