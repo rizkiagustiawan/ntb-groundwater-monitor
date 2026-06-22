@@ -18,6 +18,7 @@ from app.routers.ai import router as ai_router
 from app.routers.report import router as report_router
 from app.routers.bmkg import router as bmkg_router
 from app.routers.sar import router as sar_router
+from app.routers.fusion import router as fusion_router
 
 ALLOWED_ORIGINS = os.getenv(
     "CORS_ORIGINS",
@@ -48,6 +49,7 @@ app.include_router(ai_router)
 app.include_router(report_router)
 app.include_router(bmkg_router)
 app.include_router(sar_router)
+app.include_router(fusion_router)
 
 
 @app.get("/")
