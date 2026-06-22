@@ -24,3 +24,8 @@ Thumbs.db
 # GLDAS NetCDF
 backend/data/gldas/*.nc4
 data/gldas/*.nc4
+
+# ML Models
+data/models/*.joblib
+data/models/*.pkl
+data/models/*.json
