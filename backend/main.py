@@ -63,6 +63,8 @@ app.include_router(chirps_router)
 app.include_router(anthropogenic_router)
 app.include_router(enso_router)
 app.include_router(validation_router)
+app.include_router(downscale_router)
+app.include_router(potential_router)
 app.include_router(gldas_ensemble_router)
 
 
