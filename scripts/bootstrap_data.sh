@@ -42,6 +42,33 @@ $COMPOSE_CMD exec -T api "$REMOTE_API_PY" /scripts/load_ndvi_csv.py --csv "$NDVI
 echo "==> Load NASA GRACE NetCDF"
 $COMPOSE_CMD exec -T api "$REMOTE_API_PY" /scripts/grace_to_postgis.py --nc "$GRACE_FILE"
 
+echo "==> Load CHIRPS precipitation (if file exists)"
+CHIRPS_FILE="${CHIRPS_FILE:-/data/chirps/chirps_ntb.csv}"
+if $COMPOSE_CMD exec -T api test -f "$CHIRPS_FILE" 2>/dev/null; then
+  $COMPOSE_CMD exec -T api "$REMOTE_API_PY" /scripts/load_chirps_csv.py --csv "$CHIRPS_FILE"
+else
+  echo "  SKIP: $CHIRPS_FILE not found. Run download_chirps.py first."
+fi
+
+echo "==> Load BMKG rainfall (if file exists)"
+BMKG_FILE="${BMKG_FILE:-/data/bmkg/bmkg_rainfall_ntb.csv}"
+if $COMPOSE_CMD exec -T api test -f "$BMKG_FILE" 2>/dev/null; then
+  $COMPOSE_CMD exec -T api "$REMOTE_API_PY" /scripts/bmkg_sync.py --csv "$BMKG_FILE"
+else
+  echo "  SKIP: $BMKG_FILE not found. Run download_bmkg.py first."
+fi
+
+echo "==> Load SAR subsidence (if file exists)"
+SAR_FILE="${SAR_FILE:-/data/sar/sar_subsidence_ntb.csv}"
+if $COMPOSE_CMD exec -T api test -f "$SAR_FILE" 2>/dev/null; then
+  $COMPOSE_CMD exec -T api "$REMOTE_API_PY" /scripts/load_sar_csv.py --csv "$SAR_FILE"
+else
+  echo "  SKIP: $SAR_FILE not found. Run download_sar.py first."
+fi
+
+echo "==> Build unified monitoring table"
+$COMPOSE_CMD exec -T api "$REMOTE_API_PY" /scripts/sync_unified.py 2020 2026
+
 echo "==> Bootstrap completed"
 $COMPOSE_CMD exec -T db psql -U rizki -d ntb_groundwater -c "SELECT COUNT(*) AS sentinel2_ndvi_rows FROM sentinel2_ndvi;"
 $COMPOSE_CMD exec -T db psql -U rizki -d ntb_groundwater -c "SELECT COUNT(*) AS grace_tws_rows FROM grace_tws;"
