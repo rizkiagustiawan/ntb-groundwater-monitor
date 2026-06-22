@@ -293,6 +293,8 @@ select:focus{border-color:var(--accent)}
       <div class="chart-wrap" id="ndvi-chart-wrap" style="display:none"><canvas id="ndvi-chart"></canvas></div>
       <div class="chart-label" id="bmkg-chart-label" style="display:none">Curah Hujan BMKG</div>
       <div class="chart-wrap" id="bmkg-chart-wrap" style="display:none"><canvas id="bmkg-chart"></canvas></div>
+      <div class="chart-label" id="fusion-chart-label" style="display:none">Multi-Sensor Overview</div>
+      <div class="chart-wrap" id="fusion-chart-wrap" style="display:none"><canvas id="fusion-chart"></canvas></div>
       <div class="legal-note" id="det-legal"></div>
     </div>
   </div>
@@ -326,10 +328,16 @@ function setChartVisibility(label, visible=true){
 function clearDetailChart(){
   if(chartInst){chartInst.destroy();chartInst=null;}
   if(ndviChartInst){ndviChartInst.destroy();ndviChartInst=null;}
+  if(bmkgChartInst){bmkgChartInst.destroy();bmkgChartInst=null;}
+  if(fusionChartInst){fusionChartInst.destroy();fusionChartInst=null;}
   const ctx=document.getElementById('det-chart').getContext('2d');
   ctx.clearRect(0,0,ctx.canvas.width,ctx.canvas.height);
   document.getElementById('ndvi-chart-label').style.display='none';
   document.getElementById('ndvi-chart-wrap').style.display='none';
+  document.getElementById('bmkg-chart-label').style.display='none';
+  document.getElementById('bmkg-chart-wrap').style.display='none';
+  document.getElementById('fusion-chart-label').style.display='none';
+  document.getElementById('fusion-chart-wrap').style.display='none';
 }
 
 function showNoTimeSeries(label='Data historis tidak tersedia'){
@@ -590,6 +598,9 @@ async function selectWell(id,coords, isActive=true){
       }
     }catch(e){console.log('NDVI timeseries error:',e);}
   }
+
+  // Load multi-sensor fusion chart
+  if(coords){loadFusionTimeseries(coords[1],coords[0]);}
 }
 
 function closeDetail(){
@@ -743,6 +754,52 @@ async function loadBMKGRainfall(stationId) {
       }
     });
   } catch (e) { console.log('BMKG chart error:', e); }
+}
+
+// MULTI-SENSOR FUSION CHART
+let fusionChartInst = null;
+
+async function loadFusionTimeseries(lat, lon) {
+  try {
+    const r = await fetch(`${API}/fusion/timeseries?lat=${lat}&lon=${lon}&months=24`);
+    if (!r.ok) return;
+    const d = await r.json();
+    if (!d.series || !d.series.length) return;
+    
+    document.getElementById('fusion-chart-label').textContent = 'Multi-Sensor Overview (24 bulan)';
+    document.getElementById('fusion-chart-label').style.display = 'block';
+    document.getElementById('fusion-chart-wrap').style.display = 'block';
+    
+    if (fusionChartInst) { fusionChartInst.destroy(); fusionChartInst = null; }
+    const ctx = document.getElementById('fusion-chart').getContext('2d');
+    fusionChartInst = new Chart(ctx, {
+      type: 'bar',
+      data: {
+        labels: d.series.map(s => s.period),
+        datasets: [{
+          label: 'GWS Anomaly (cm)',
+          data: d.series.map(s => s.gws_anomaly),
+          backgroundColor: d.series.map(s => {
+            const v = s.gws_anomaly || 0;
+            return v < -2 ? '#ef4444bb' : v < 0 ? '#f59e0bbb' : '#10b981bb';
+          }),
+          borderColor: d.series.map(s => {
+            const v = s.gws_anomaly || 0;
+            return v < -2 ? '#ef4444' : v < 0 ? '#f59e0b' : '#10b981';
+          }),
+          borderWidth: 0, borderRadius: 2
+        }]
+      },
+      options: {
+        responsive: true, maintainAspectRatio: false,
+        plugins: { legend: { display: false } },
+        scales: {
+          x: { ticks: { color: '#4a5568', font: { size: 8 }, maxRotation: 45 }, grid: { color: '#1a2438' } },
+          y: { ticks: { color: '#4a5568', font: { size: 8 }, callback: v => v + ' cm' }, grid: { color: '#1a2438' } }
+        }
+      }
+    });
+  } catch (e) { console.log('Fusion chart error:', e); }
 }
 
 // GRACE CHART
