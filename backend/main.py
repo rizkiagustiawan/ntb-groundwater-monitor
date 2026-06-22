@@ -19,6 +19,7 @@ from app.routers.report import router as report_router
 from app.routers.bmkg import router as bmkg_router
 from app.routers.sar import router as sar_router
 from app.routers.fusion import router as fusion_router
+from app.routers.drought import router as drought_router
 from app.routers.chirps import router as chirps_router
 
 ALLOWED_ORIGINS = os.getenv(
@@ -51,6 +52,7 @@ app.include_router(report_router)
 app.include_router(bmkg_router)
 app.include_router(sar_router)
 app.include_router(fusion_router)
+app.include_router(drought_router)
 app.include_router(chirps_router)
 
 
