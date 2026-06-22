@@ -172,3 +172,87 @@ LEFT JOIN LATERAL (
     ORDER BY measured_at DESC LIMIT 1
 ) m ON TRUE;
 
+-- ============================================================
+-- TABEL: Data Curah Hujan BMKG
+-- Sumber: BMKG API (https://data.bmkg.go.id)
+-- ============================================================
+CREATE TABLE IF NOT EXISTS bmkg_rainfall (
+    id              SERIAL PRIMARY KEY,
+    station_id      VARCHAR(20) NOT NULL,
+    station_name    VARCHAR(100),
+    lat             FLOAT NOT NULL,
+    lon             FLOAT NOT NULL,
+    date            DATE NOT NULL,
+    precip_mm       FLOAT,
+    humidity_pct    FLOAT,
+    temp_c          FLOAT,
+    wind_speed_ms   FLOAT,
+    geom            GEOMETRY(Point, 4326),
+    source          VARCHAR(50) DEFAULT 'bmkg_api',
+    created_at      TIMESTAMPTZ DEFAULT NOW(),
+    UNIQUE(station_id, date)
+);
+
+CREATE INDEX IF NOT EXISTS idx_bmkg_geom ON bmkg_rainfall USING GIST(geom);
+CREATE INDEX IF NOT EXISTS idx_bmkg_date ON bmkg_rainfall(date);
+
+-- ============================================================
+-- TABEL: Data Subsidence Sentinel-1 SAR
+-- Sumber: COPERNICUS/S1_GRD via Google Earth Engine
+-- ============================================================
+CREATE TABLE IF NOT EXISTS sar_subsidence (
+    id                  SERIAL PRIMARY KEY,
+    location            VARCHAR(100) NOT NULL,
+    kabupaten           VARCHAR(100),
+    lat                 FLOAT NOT NULL,
+    lon                 FLOAT NOT NULL,
+    period_start        DATE NOT NULL,
+    period_end          DATE NOT NULL,
+    displacement_mm     FLOAT,
+    rate_mm_year        FLOAT,
+    n_observations      INTEGER,
+    coherence           FLOAT,
+    geom                GEOMETRY(Point, 4326),
+    source              VARCHAR(50) DEFAULT 'sentinel1_gee',
+    created_at          TIMESTAMPTZ DEFAULT NOW(),
+    UNIQUE(location, period_start, period_end)
+);
+
+CREATE INDEX IF NOT EXISTS idx_sar_geom ON sar_subsidence USING GIST(geom);
+CREATE INDEX IF NOT EXISTS idx_sar_rate ON sar_subsidence(rate_mm_year);
+
+-- ============================================================
+-- TABEL: Unified Multi-Sensor Monitoring
+-- Gabungan: GRACE + GLDAS + CHIRPS + BMKG + Sentinel-2 + SAR
+-- ============================================================
+CREATE TABLE IF NOT EXISTS unified_monitoring (
+    id                  SERIAL PRIMARY KEY,
+    period_date         DATE NOT NULL,
+    lat                 FLOAT NOT NULL,
+    lon                 FLOAT NOT NULL,
+    tws_anomaly         FLOAT,
+    tws_uncertainty     FLOAT,
+    sms_anomaly         FLOAT,
+    gws_anomaly         FLOAT,
+    chirps_precip_mm    FLOAT,
+    chirps_anomaly      FLOAT,
+    bmkg_precip_mm      FLOAT,
+    bmkg_station_id     VARCHAR(20),
+    bmkg_distance_km    FLOAT,
+    ndvi                FLOAT,
+    ndvi_location       VARCHAR(100),
+    ndvi_distance_km    FLOAT,
+    sar_subsidence_mm   FLOAT,
+    sar_rate_mm_year    FLOAT,
+    drought_index       FLOAT,
+    risk_level          VARCHAR(20),
+    grid_resolution     VARCHAR(20) DEFAULT '0.5deg',
+    data_completeness   FLOAT,
+    created_at          TIMESTAMPTZ DEFAULT NOW(),
+    UNIQUE(period_date, lat, lon)
+);
+
+CREATE INDEX IF NOT EXISTS idx_unified_date ON unified_monitoring(period_date);
+CREATE INDEX IF NOT EXISTS idx_unified_risk ON unified_monitoring(risk_level);
+CREATE INDEX IF NOT EXISTS idx_unified_coords ON unified_monitoring(lat, lon);
+
