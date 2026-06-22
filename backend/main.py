@@ -21,6 +21,8 @@ from app.routers.sar import router as sar_router
 from app.routers.fusion import router as fusion_router
 from app.routers.drought import router as drought_router
 from app.routers.chirps import router as chirps_router
+from app.routers.anthropogenic import router as anthropogenic_router
+from app.routers.enso import router as enso_router
 from app.routers.validation import router as validation_router
 
 ALLOWED_ORIGINS = os.getenv(
@@ -55,6 +57,8 @@ app.include_router(sar_router)
 app.include_router(fusion_router)
 app.include_router(drought_router)
 app.include_router(chirps_router)
+app.include_router(anthropogenic_router)
+app.include_router(enso_router)
 app.include_router(validation_router)
 
 
