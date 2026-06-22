@@ -27,6 +27,7 @@ from app.routers.validation import router as validation_router
 from app.routers.downscale import router as downscale_router
 from app.routers.potential import router as potential_router
 from app.routers.gldas_ensemble import router as gldas_ensemble_router
+from app.routers.gap import router as gap_router
 
 ALLOWED_ORIGINS = os.getenv(
     "CORS_ORIGINS",
@@ -66,6 +67,7 @@ app.include_router(validation_router)
 app.include_router(downscale_router)
 app.include_router(potential_router)
 app.include_router(gldas_ensemble_router)
+app.include_router(gap_router)
 
 
 @app.get("/")
