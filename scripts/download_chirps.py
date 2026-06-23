@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
-"""Download CHIRPS precipitation data for NTB via Google Earth Engine."""
+"""Download CHIRPS precipitation data for NTB via Google Earth Engine (optimized)."""
 import os
 import sys
 import logging
 import csv
+import time
 import ee
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
@@ -12,9 +13,14 @@ log = logging.getLogger(__name__)
 GEE_KEY = os.getenv("GEE_KEY_PATH", os.path.join(os.path.dirname(os.path.dirname(__file__)), "gee-key.json"))
 GEE_ACCOUNT = os.getenv("GEE_SERVICE_ACCOUNT", "geoesg-worker@thermal-cathode-421211.iam.gserviceaccount.com")
 
+NTB_BBOX = [115.5, -9.5, 120.0, -7.5]
+GRID_POINTS = []
+for lat in [-9.25, -8.75, -8.25, -7.75]:
+    for lon in [115.75, 116.25, 116.75, 117.25, 117.75, 118.25, 118.75, 119.25]:
+        GRID_POINTS.append((lat, lon))
+
 
 def init_gee():
-    """Initialize GEE with service account."""
     if os.path.exists(GEE_KEY):
         credentials = ee.ServiceAccountCredentials(GEE_ACCOUNT, GEE_KEY)
         ee.Initialize(credentials)
@@ -24,74 +30,82 @@ def init_gee():
         log.info("GEE initialized with default credentials")
 
 
-# NTB bounding box
-NTB_BBOX = [115.5, -9.5, 120.0, -7.5]
-NTB_REGION = ee.Geometry.Rectangle(NTB_BBOX)
-
-# Grid points matching GRACE resolution (0.5 degree)
-GRID_POINTS = []
-for lat in [-9.25, -8.75, -8.25, -7.75]:
-    for lon in [115.75, 116.25, 116.75, 117.25, 117.75, 118.25, 118.75, 119.25]:
-        GRID_POINTS.append((lat, lon))
-
-
 def download_chirps(start_year=2000, end_year=2026, output_csv="data/chirps/chirps_ntb.csv"):
-    """Download monthly CHIRPS precipitation for NTB grid points."""
     os.makedirs(os.path.dirname(output_csv), exist_ok=True)
 
+    ntg_region = ee.Geometry.Rectangle(NTB_BBOX)
     chirps = ee.ImageCollection("UCSB-CHG/CHIRPS/DAILY") \
         .filterDate(f"{start_year}-01-01", f"{end_year}-12-31") \
-        .filterBounds(NTB_REGION)
+        .filterBounds(ntg_region)
 
-    log.info(f"CHIRPS collection size: {chirps.size().getInfo()} images")
+    log.info(f"CHIRPS collection: {chirps.size().getInfo()} daily images")
 
-    # Aggregate to monthly
-    def monthly_sum(year, month):
-        start = ee.Date.fromYMD(year, month, 1)
-        end = start.advance(1, 'month')
-        monthly = chirps.filterDate(start, end).sum()
-        return monthly.set('system:time_start', start.millis()) \
-                      .set('year', year).set('month', month)
+    # Create multi-point geometry for batch extraction
+    fc = ee.FeatureCollection([ee.Feature(ee.Geometry.Point([lon, lat]), {'lat': lat, 'lon': lon})
+                               for lat, lon in GRID_POINTS])
 
-    years = ee.List.sequence(start_year, end_year)
-    months = ee.List.sequence(1, 12)
+    # Process year by year to avoid memory issues
+    all_features = []
 
-    monthly_collection = ee.ImageCollection.fromImages(
-        years.map(lambda y: months.map(lambda m: monthly_sum(y, m))).flatten()
-    )
+    for year in range(start_year, end_year + 1):
+        log.info(f"Processing {year}...")
+        t0 = time.time()
 
-    log.info(f"Monthly collection: {monthly_collection.size().getInfo()} months")
+        for month in range(1, 13):
+            start = ee.Date.fromYMD(year, month, 1)
+            end = start.advance(1, 'month')
+            monthly = chirps.filterDate(start, end)
 
-    # Sample at grid points
-    features = []
-    for lat, lon in GRID_POINTS:
-        point = ee.Geometry.Point([lon, lat])
+            # Skip if no images in this month
+            if monthly.size().getInfo() == 0:
+                continue
 
-        def extract_point(img):
-            val = img.reduceRegion(ee.Reducer.first(), point, 0.05)
-            return ee.Feature(None, {
-                'lat': lat,
-                'lon': lon,
-                'year': img.get('year'),
-                'month': img.get('month'),
-                'precip_mm': val.get('precipitation')
-            })
+            monthly = monthly.sum()
 
-        sampled = monthly_collection.map(extract_point)
-        fc = sampled.getInfo()
+            # Batch reduceRegion for all points
+            def extract_for_point(feature):
+                geom = feature.geometry()
+                val = monthly.reduceRegion(ee.Reducer.first(), geom, 0.05)
+                precip = val.get('precipitation')
+                return feature.set('precip_mm', precip if precip is not None else -9999,
+                                   'year', year, 'month', month)
 
-        for feat in fc['features']:
-            props = feat['properties']
-            if props.get('precip_mm') is not None:
-                features.append(props)
+            results = fc.map(extract_for_point).getInfo()
 
-    # Write CSV
-    with open(output_csv, 'w', newline='') as f:
-        writer = csv.DictWriter(f, fieldnames=['lat', 'lon', 'year', 'month', 'precip_mm'])
-        writer.writeheader()
-        writer.writerows(features)
+            for feat in results['features']:
+                props = feat['properties']
+                if props.get('precip_mm') is not None and props['precip_mm'] != -9999:
+                    all_features.append(props)
 
-    log.info(f"Saved {len(features)} records to {output_csv}")
+        elapsed = time.time() - t0
+        n_records = len([f for f in all_features if f.get('year') == year])
+        log.info(f"  {year}: {n_records} records in {elapsed:.1f}s")
+
+    # Load existing data to avoid overwriting
+    existing = set()
+    if os.path.exists(output_csv):
+        with open(output_csv) as f:
+            reader = csv.DictReader(f)
+            for row in reader:
+                existing.add((float(row['lat']), float(row['lon']), int(row['year']), int(row['month'])))
+        log.info(f"Loaded {len(existing)} existing records from {output_csv}")
+
+    # Write CSV (append new records)
+    if all_features:
+        new_records = [f for f in all_features
+                       if (f['lat'], f['lon'], f['year'], f['month']) not in existing]
+        
+        mode = 'a' if os.path.exists(output_csv) and existing else 'w'
+        with open(output_csv, mode, newline='') as f:
+            writer = csv.DictWriter(f, fieldnames=['lat', 'lon', 'year', 'month', 'precip_mm'])
+            if mode == 'w':
+                writer.writeheader()
+            writer.writerows(new_records)
+        
+        total = len(existing) + len(new_records)
+        log.info(f"Added {len(new_records)} new records. Total: {total}")
+    else:
+        log.warning("No data extracted!")
 
 
 if __name__ == "__main__":
