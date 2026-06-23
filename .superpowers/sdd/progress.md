@@ -1,0 +1,15 @@
+# SDD Progress Ledger — Phase 1 Multi-Sensor Fusion
+
+Task 1: complete (6249d10, DB schema — 3 new tables)
+Task 2: complete (34adce9, BMKG sync script)
+Task 3: complete (4778987, BMKG API router)
+Task 4: complete (a3652a0, BMKG frontend)
+Task 5: complete (96ebff8, SAR subsidence script)
+Task 6: complete (fadc684, SAR API router)
+Task 7: complete (5c090a3, SAR frontend)
+Task 8: complete (559dcfc, Unified sync script)
+Task 9: complete (30c416f, Fusion API router)
+Task 10: complete (44e2d70, Fusion frontend)
+Task 11: complete (c833e6f, Tests — 12/12 pass)
+Task 12: complete (c4c2fa3, Requirements + smoke test)
+Task 13: complete (c4c2fa3, Docker Compose update)

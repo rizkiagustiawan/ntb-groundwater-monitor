@@ -24,7 +24,7 @@ def init_gee():
         log.info("GEE initialized with default credentials")
 
 
-NTB_REGION = ee.Geometry.Rectangle([115.5, -9.5, 120.0, -7.5])
+NTB_BBOX = [115.5, -9.5, 120.0, -7.5]
 
 SAMPLING_POINTS = [
     {"location": "Sumbawa_Kota", "kabupaten": "Sumbawa", "lat": -8.4911, "lon": 117.4203},
@@ -46,8 +46,10 @@ def download_sar(start_date="2020-01-01", end_date="2026-06-01", output_csv="dat
     """Calculate SAR displacement at sampling points via GEE."""
     os.makedirs(os.path.dirname(output_csv), exist_ok=True)
 
+    ntg_region = ee.Geometry.Rectangle(NTB_BBOX)
+
     s1 = ee.ImageCollection('COPERNICUS/S1_GRD') \
-        .filterBounds(NTB_REGION) \
+        .filterBounds(ntg_region) \
         .filterDate(start_date, end_date) \
         .filter(ee.Filter.eq('instrumentMode', 'IW')) \
         .filter(ee.Filter.listContains('transmitterReceiverPolarisation', 'VV')) \

@@ -1,26 +1,18 @@
 from fastapi import APIRouter, Query
-import asyncpg
-import os
-from typing import List, Optional
+
+from app.db import get_pool
 
 router = APIRouter(prefix="/climate", tags=["climate"])
 
-DATABASE_URL = os.getenv("DATABASE_URL", "postgresql://rizki:ntb_env_2024@db:5432/ntb_groundwater")
-
-async def get_db():
-    return await asyncpg.connect(DATABASE_URL)
 
 @router.get("/precipitation")
 async def get_chirps_precipitation(
     start_year: int = Query(2020, description="Tahun mulai"),
-    end_year: int   = Query(2025, description="Tahun akhir")
+    end_year: int = Query(2025, description="Tahun akhir")
 ):
-    """
-    Monthly aggregated precipitation NTB dari CHIRPS.
-    Unit: mm.
-    """
-    conn = await get_db()
-    try:
+    """Monthly aggregated precipitation NTB dari CHIRPS. Unit: mm."""
+    pool = await get_pool()
+    async with pool.acquire() as conn:
         rows = await conn.fetch("""
             SELECT year, month, ROUND(AVG(precip_mm)::numeric, 2) as avg_precip
             FROM chirps_precip
@@ -38,5 +30,3 @@ async def get_chirps_precipitation(
             "metadata": {"unit": "mm", "source": "UCSB-CHG CHIRPS v2.0"},
             "series": series
         }
-    finally:
-        await conn.close()
