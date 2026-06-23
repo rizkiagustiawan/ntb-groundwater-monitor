@@ -9,6 +9,21 @@ import ee
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 log = logging.getLogger(__name__)
 
+GEE_KEY = os.getenv("GEE_KEY_PATH", os.path.join(os.path.dirname(os.path.dirname(__file__)), "gee-key.json"))
+GEE_ACCOUNT = os.getenv("GEE_SERVICE_ACCOUNT", "geoesg-worker@thermal-cathode-421211.iam.gserviceaccount.com")
+
+
+def init_gee():
+    """Initialize GEE with service account."""
+    if os.path.exists(GEE_KEY):
+        credentials = ee.ServiceAccountCredentials(GEE_ACCOUNT, GEE_KEY)
+        ee.Initialize(credentials)
+        log.info(f"GEE initialized with service account: {GEE_ACCOUNT}")
+    else:
+        ee.Initialize()
+        log.info("GEE initialized with default credentials")
+
+
 # NTB bounding box
 NTB_BBOX = [115.5, -9.5, 120.0, -7.5]
 NTB_REGION = ee.Geometry.Rectangle(NTB_BBOX)
@@ -80,7 +95,7 @@ def download_chirps(start_year=2000, end_year=2026, output_csv="data/chirps/chir
 
 
 if __name__ == "__main__":
-    ee.Initialize()
+    init_gee()
     start = int(sys.argv[1]) if len(sys.argv) > 1 else 2000
     end = int(sys.argv[2]) if len(sys.argv) > 2 else 2026
     download_chirps(start, end)

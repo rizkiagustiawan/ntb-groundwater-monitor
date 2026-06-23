@@ -92,7 +92,16 @@ def load_csv(csv_path):
 def run_gee(db_url):
     import ee
 
-    ee.Initialize()
+    GEE_KEY = os.getenv("GEE_KEY_PATH", os.path.join(os.path.dirname(os.path.dirname(__file__)), "gee-key.json"))
+    GEE_ACCOUNT = os.getenv("GEE_SERVICE_ACCOUNT", "geoesg-worker@thermal-cathode-421211.iam.gserviceaccount.com")
+
+    if os.path.exists(GEE_KEY):
+        credentials = ee.ServiceAccountCredentials(GEE_ACCOUNT, GEE_KEY)
+        ee.Initialize(credentials)
+        print(f"GEE initialized with service account: {GEE_ACCOUNT}")
+    else:
+        ee.Initialize()
+        print("GEE initialized with default credentials")
 
     s1 = ee.ImageCollection("COPERNICUS/S1_GRD") \
         .filter(ee.Filter.eq("instrumentMode", "IW")) \
