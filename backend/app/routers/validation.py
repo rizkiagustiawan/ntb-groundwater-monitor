@@ -1,4 +1,4 @@
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Query
 from datetime import datetime
 
 from app.db import get_pool
@@ -225,4 +225,130 @@ async def well_validation_detail(well_id: int):
             "n_common_months": len(common),
             "series": series,
             "generated_at": datetime.now().isoformat(),
+        }
+
+
+@router.get("/lag-analysis")
+async def get_lag_analysis(
+    well_id: int = Query(..., description="Well ID"),
+    max_lag: int = Query(12, ge=1, le=24, description="Max lag months to test"),
+):
+    """
+    Analyze time lag between GRACE GWS anomaly and well water level.
+    Based on Arifin et al. (2025) methodology for reconciling GRACE to piezometry.
+    """
+    pool = await get_pool()
+    async with pool.acquire() as conn:
+        import numpy as np
+
+        well = await conn.fetchrow("SELECT * FROM wells WHERE id = $1", well_id)
+        if not well:
+            return {"error": f"Well {well_id} not found"}
+
+        measurements = await conn.fetch(
+            """
+            SELECT DATE_TRUNC('month', measured_at) AS month,
+                   AVG(water_level_m) AS avg_wl
+            FROM measurements
+            WHERE well_id = $1
+            GROUP BY DATE_TRUNC('month', measured_at)
+            ORDER BY month
+            """,
+            well_id,
+        )
+
+        if len(measurements) < 12:
+            return {"error": "Need at least 12 months of measurement data"}
+
+        gws_data = await conn.fetch(
+            """
+            SELECT t.period_date,
+                   ROUND((AVG(t.tws_anomaly) - COALESCE(AVG(s.sms_anomaly), 0))::numeric, 2) AS gws
+            FROM grace_tws t
+            LEFT JOIN gldas_sms s ON
+                EXTRACT(YEAR FROM t.period_date) = s.year AND
+                EXTRACT(MONTH FROM t.period_date) = s.month AND
+                ABS(t.lat - s.lat) < 0.01 AND ABS(t.lon - s.lon) < 0.01
+            WHERE ABS(t.lat - $1) < 0.3 AND ABS(t.lon - $2) < 0.3
+            GROUP BY t.period_date
+            ORDER BY t.period_date
+            """,
+            float(well["lat"]),
+            float(well["lon"]),
+        )
+
+        if len(gws_data) < 12:
+            return {"error": "Insufficient GRACE data near this well"}
+
+        wl_dict = {r["month"].strftime("%Y-%m"): float(r["avg_wl"]) for r in measurements}
+        gws_dict = {r["period_date"].strftime("%Y-%m"): float(r["gws"]) for r in gws_data}
+
+        common_months = sorted(set(wl_dict.keys()) & set(gws_dict.keys()))
+
+        if len(common_months) < 12:
+            return {"error": f"Only {len(common_months)} overlapping months. Need 12+."}
+
+        wl = np.array([wl_dict[m] for m in common_months])
+        gws = np.array([gws_dict[m] for m in common_months])
+
+        lags = list(range(0, max_lag + 1))
+        correlations = []
+        for lag in lags:
+            if lag == 0:
+                corr = np.corrcoef(gws, wl)[0, 1]
+            else:
+                corr = np.corrcoef(gws[:-lag], wl[lag:])[0, 1]
+            correlations.append(round(float(corr), 4) if not np.isnan(corr) else 0)
+
+        valid = [(abs(c), i) for i, c in enumerate(correlations) if not np.isnan(c)]
+        optimal_lag = max(valid, key=lambda x: x[0])[1] if valid else 0
+        optimal_corr = correlations[optimal_lag]
+
+        if abs(optimal_corr) >= 0.7:
+            strength = "strong"
+        elif abs(optimal_corr) >= 0.4:
+            strength = "moderate"
+        elif abs(optimal_corr) >= 0.2:
+            strength = "weak"
+        else:
+            strength = "none"
+
+        wl_trend = np.polyfit(range(len(wl)), wl, 1)[0]
+        gws_trend = np.polyfit(range(len(gws)), gws, 1)[0]
+
+        return {
+            "well": {
+                "id": well["id"],
+                "code": well["well_code"],
+                "name": well["name"],
+                "kabupaten": well["kabupaten"],
+                "lat": float(well["lat"]),
+                "lon": float(well["lon"]),
+            },
+            "lag_analysis": {
+                "optimal_lag_months": optimal_lag,
+                "correlation_at_optimal_lag": optimal_corr,
+                "strength": strength,
+                "n_overlapping_months": len(common_months),
+                "interpretation": f"GRACE GWS leads well water level by {optimal_lag} months (r={optimal_corr:.3f}, {strength}).",
+            },
+            "trends": {
+                "well_trend_m_per_month": round(float(wl_trend), 4),
+                "gws_trend_cm_per_month": round(float(gws_trend), 4),
+                "concordant": (wl_trend < 0 and gws_trend < 0)
+                or (wl_trend > 0 and gws_trend > 0),
+            },
+            "lag_correlations": [
+                {"lag_months": lag, "correlation": corr}
+                for lag, corr in zip(lags, correlations)
+            ],
+            "aligned_data": [
+                {
+                    "period": m,
+                    "well_water_level": round(wl_dict[m], 3),
+                    "gws_anomaly": gws_dict[m],
+                }
+                for m in common_months
+            ],
+            "reference": "Arifin et al. (2025) — Groundwater storage dynamics and climate variability in Lower Kutai Basin",
         }
