@@ -231,6 +231,84 @@
 
 ---
 
+## 13. Paper Terbaru 2024-2026 — GRACE Downscaling + Machine Learning
+
+| # | Paper | Authors | Year | Journal | DOI | Relevance |
+|---|-------|---------|------|---------|-----|-----------|
+| 86 | **Assessing groundwater drought in Iran using GRACE data and machine learning** | Kashani, A., Safavi, H.R. | 2025 | Scientific Reports (Nature) | 10.1038/s41598-025-99342-9 | XGBoost downscaling TWSA untuk groundwater drought. Cited 23x. |
+| 87 | **Spatial downscaling of GRACE-derived groundwater storage changes across diverse climates with Random Forests** | Wang, Y., Li, C., Cui, Y., et al. | 2024 | Journal of Hydrology | — | RF downscale 3°→0.25° untuk GWS. Cited 42x. |
+| 88 | **Machine learning downscaling of GRACE/GRACE-FO data to capture drought effects on groundwater at local scale** | Shilengwe, C., Banda, K., Nyambe, I. | 2024 | Environmental Systems Research | 10.1186/s40068-024-00368-1 | ML downscaling di data-scarce region. Cited 27x. |
+| 89 | **Characterization of groundwater storage changes in Amazon based on downscaling GRACE with ML** | Satizábal-Alarcón, D.A., Suhogusoff, A., et al. | 2024 | Science of The Total Environment | — | ML downscale GRACE 1°→0.1° di Amazon. Cited 39x. |
+| 90 | **Application of ML methods for GRACE data based groundwater modeling — systematic review** | Nourani, V., Paknezhad, N.J., Ng, A., et al. | 2024 | Groundwater for Sustainable Development | — | Review sistematis ML untuk GRACE. Cited 27x. |
+| 91 | **Downscaled GRACE/GRACE-FO for spatiotemporal monitoring of GWS at local scale using ML** | Ali, S., Ran, J., Khorrami, B., et al. | 2024 | Groundwater for Sustainable Development | — | Comprehensive ML downscaling framework. Cited 47x. |
+| 92 | **ML-based Downscaling of GRACE to Enhance Assessment of Coastal Plain GWS** | Wu, C., Lu, C., Hu, J., et al. | 2025 | Water Resources Management | 10.1007/s11269-025-04254-y | ML downscale untuk coastal groundwater. Cited 6x. |
+| 93 | **Deep learning-based downscaling of GWSA from GRACE and GRACE-FO** | Liang, Q., Hao, X., Ci, M., et al. | 2025 | J. Hydrology: Regional Studies | — | Deep learning (VAE) downscale 0.5°→0.1°. Cited 2x. |
+| 94 | **Flexible multi-scale approach for downscaling GRACE using LightGBM and Random Forest** | Mohtaram, A., Shafizadeh-Moghadam, H., et al. | 2025 | J. Hydrology: Regional Studies | — | LightGBM + RF ensemble downscaling. Cited 17x. |
+| 95 | **GRACE Downscaling and ML Models for Groundwater Prediction: Systematic Review** | Al Nadabi, M.S., El-Diasty, M., Etri, T., Nikoo, M.R. | 2026 | Hydrology | — | Review terbaru 2026 tentang GRACE downscaling. |
+
+---
+
+## 14. Paper Terbaru 2024-2026 — GRACE/TWS di Indonesia & Tropis
+
+| # | Paper | Authors | Year | Journal | DOI | Relevance |
+|---|-------|---------|------|---------|-----|-----------|
+| 96 | **Groundwater storage dynamics and climate variability in Lower Kutai Basin, Indonesia** | Arifin, Taylor, R., Shamsudduha, M., et al. | 2025 | EGUSphere (preprint) | — | **Sangat relevan** — GRACE ΔGWS vs piezometer di Indonesia. |
+| 97 | **Analisis Data Pola Musim di Indonesia Menggunakan Data EWH dari Satelit GRACE** | Taufiq, M., Anjasmara, I.M. | 2025 | INSOLOGI | — | Pola musim GRACE EWH di Indonesia. |
+| 98 | **Predictive Modeling of TWS Anomalies in Kalimantan Basins: Bridging GRACE/GRACE-FO Gap with XGBoost** | Safira, R.A.D., Anjasmara, I.M., Awange, J.L. | 2024 | GEOID (ITS) | — | XGBoost untuk gap GRACE/GRACE-FO di Indonesia. Cited 1x. |
+| 99 | **El Niño effects on water availability for agriculture: Case study Magelang, Central Java** | Rahma, A.D., Ludwig, F. | 2024 | Applied Environmental Research | — | Dampak El Niño pada ketersediaan air di Indonesia. Cited 12x. |
+| 100 | **Climate Anomalies of Maize Drought Level based on Land Water Balance in Gorontalo, Indonesia** | Pembengo, W., Rahim, Y., Lihawa, M. | 2026 | Agricultural Engineering | — | Land water balance untuk drought di Indonesia. |
+| 101 | **Impact of Tropical Climate Anomalies on Land Cover Changes in Sumatra's Peatlands** | Saputra, A.D., Irfan, M., Khakim, M.Y.N., Iskandar, I. | 2026 | Sustainability | — | Climate anomalies impact di Indonesia tropis. Cited 1x. |
+| 102 | **Global increases in dry-wet abrupt alternation events under climate change** | He, N., Yin, J., Liu, P., et al. | 2025 | Geophysical Research Letters | 10.1029/2025GL117322 | Dry-wet alternation di Indonesia. Cited 17x. |
+
+---
+
+## 15. Paper Terbaru 2024-2026 — Drought Early Warning & SPI
+
+| # | Paper | Authors | Year | Journal | DOI | Relevance |
+|---|-------|---------|------|---------|-----|-----------|
+| 103 | **Groundwater Drought: Can We Measure It?** | Ndehedehe, C. | 2026 | Springer (book chapter) | — | Review metode pengukuran groundwater drought. |
+| 104 | **Assessment of hydrological drought vulnerability using SPI and SWI indices** | Krishnan, D., Partheeban, P., et al. | 2026 | Scientific Reports (Nature) | — | SPI + SWI untuk drought vulnerability. Cited 1x. |
+| 105 | **Deciphering the spatial fingerprint of drought propagation through precipitation, vegetation and groundwater** | Bilal, S.B., Gupta, V. | 2024 | Int. J. Climatology | — | Drought propagation dari curah hujan ke groundwater. Cited 11x. |
+| 106 | **Evaluation of GRACE for drought monitoring and groundwater management in small aquifer** | Amiresmaeili, V., Rahimzadegan, M., Mousavi, S.M. | 2026 | Acta Geophysica | — | GRACE + SPI untuk drought di aquifer kecil. |
+| 107 | **Integration of ML and remote sensing for drought index prediction** | Talebi, H., Samadianfard, S. | 2024 | Earth Science Informatics | 10.1007/s12145-024-01437-w | ML + RS untuk prediksi drought index. Cited 27x. |
+| 108 | **Drought dynamics in Nile River basin: meteorological, agricultural, and groundwater drought propagation** | Nigatu, Z.M., You, W., Melesse, A.M. | 2024 | Remote Sensing | — | Drought propagation ke groundwater. Cited 30x. |
+| 109 | **Integrating Meteorological and GRACE-Based Indices to Assess Groundwater Drought Under Climate Change** | Nawaz, A., Alfio, M.R., Casarci, M. | 2026 | Earth Systems and Environment | — | SPI/SPEI + GRACE untuk groundwater drought. Cited 1x. |
+| 110 | **Integration of RS and ML for agricultural drought early warning — Ethiopia** | Alemu, M.G., Zimale, F.A. | 2025 | Environmental Monitoring and Assessment | 10.1007/s10661-025-13708-0 | RS + ML untuk drought early warning. Cited 11x. |
+| 111 | **Agricultural drought monitoring and early warning using RS-based combined index** | Satapathy, T., Dietrich, J., Ramadas, M. | 2024 | Environmental Monitoring and Assessment | — | Combined drought index untuk early warning. Cited 29x. |
+| 112 | **Multi-source RS and DL for water resource changes and drought indices** | Guan, H., Jiang, Z., Lu, J., Wan, Y. | 2025 | Water | — | Multi-source RS + deep learning untuk drought. Cited 2x. |
+
+---
+
+## Ringkasan Update
+
+| Kategori | Sebelum | Baru (2024-2026) | Total |
+|----------|---------|------------------|-------|
+| GRACE Downscaling + ML | 4 | **10** | 14 |
+| GRACE/TWS Indonesia | 8 | **7** | 15 |
+| Drought Early Warning & SPI | 4 | **10** | 14 |
+| **Total paper** | **85** | **27** | **112** |
+
+### Key Trends 2024-2026
+
+1. **ML Downscaling** — XGBoost, Random Forest, LightGBM, Deep Learning (VAE) semuanya berhasil downscale GRACE dari 0.5° ke 0.1°-0.25°
+2. **Indonesia** — Paper GRACE di Indonesia masih sedikit, tapi Arifin (2025) dan Taufiq (2025) menunjukkan tren meningkat
+3. **Drought Propagation** — Banyak paper 2024-2026 tentang bagaimana drought "propagate" dari curah hujan → vegetation → groundwater
+4. **Multi-source Integration** — Tren menggabungkan GRACE + GLDAS + CHIRPS + Sentinel dalam satu framework (persis seperti platform ini)
+5. **Systematic Reviews** — 3 review baru (2024-2026) tentang ML untuk GRACE — platform ini sudah mengikuti best practices
+
+### Relevance ke NTB Monitor
+
+| Paper | Fitur di Platform |
+|-------|-------------------|
+| #86-95 (ML Downscaling) | ✅ `/api/downscale/predict` + `grace_downscale.py` |
+| #96-102 (Indonesia TWS) | ✅ Data GRACE NTB + GWS calculation |
+| #103-112 (Drought EWS) | ✅ `/api/drought/*` + SPI calculation |
+| #87 Random Forest | ⚠️ Bisa upgrade dari GradientBoosting ke RF |
+| #93 Deep Learning VAE | ⚠️ Bisa tambah VAE downscaling sebagai opsi |
+| #105 Drought Propagation | ⚠️ Bisa tambah analisis propagasi di platform |
+
+---
+
 *File ini bisa dijadikan dasar untuk:*
 1. *Menambah referensi ilmiah di README.md*
 2. *Meningkatkan kredibilitas platform untuk publikasi/peer-review*
