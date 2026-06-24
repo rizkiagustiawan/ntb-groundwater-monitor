@@ -1,4 +1,5 @@
 import json
+from datetime import date
 from typing import Optional
 
 from fastapi import APIRouter, HTTPException, Query
@@ -30,11 +31,13 @@ async def get_grace_tws(
         params = []
 
         if start_date:
-            params.append(f"{start_date}-01")
-            query += f" AND period_date >= ${len(params)}::date"
+            y, m = start_date.split("-")
+            params.append(date(int(y), int(m), 1))
+            query += f" AND period_date >= ${len(params)}"
         if end_date:
-            params.append(f"{end_date}-01")
-            query += f" AND period_date <= ${len(params)}::date"
+            y, m = end_date.split("-")
+            params.append(date(int(y), int(m), 1))
+            query += f" AND period_date <= ${len(params)}"
         if bbox:
             try:
                 lon_min, lat_min, lon_max, lat_max = map(float, bbox.split(","))

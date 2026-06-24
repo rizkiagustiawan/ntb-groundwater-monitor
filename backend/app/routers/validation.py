@@ -241,7 +241,7 @@ async def get_lag_analysis(
     async with pool.acquire() as conn:
         import numpy as np
 
-        well = await conn.fetchrow("SELECT * FROM wells WHERE id = $1", well_id)
+        well = await conn.fetchrow("SELECT *, ST_Y(geom) AS lat, ST_X(geom) AS lon FROM wells WHERE id = $1", well_id)
         if not well:
             return {"error": f"Well {well_id} not found"}
 

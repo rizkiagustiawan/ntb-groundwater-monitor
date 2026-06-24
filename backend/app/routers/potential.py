@@ -202,7 +202,7 @@ async def validate_potential():
         )
         well_rows = await conn.fetch(
             """
-            SELECT lat, lon FROM wells
+            SELECT ST_Y(geom) AS lat, ST_X(geom) AS lon FROM wells
             UNION ALL
             SELECT lat, lon FROM wells_esdm
             """

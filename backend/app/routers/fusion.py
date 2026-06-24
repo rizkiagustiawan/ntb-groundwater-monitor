@@ -97,7 +97,7 @@ async def get_timeseries(
             SELECT * FROM unified_monitoring
             WHERE lat BETWEEN $1 - 0.01 AND $1 + 0.01
               AND lon BETWEEN $2 - 0.01 AND $2 + 0.01
-              AND period_date >= CURRENT_DATE - ($3 || ' months')::interval
+              AND period_date >= CURRENT_DATE - make_interval(months => $3)
             ORDER BY period_date
             """,
             lat, lon, months,

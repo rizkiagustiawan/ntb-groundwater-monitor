@@ -20,7 +20,7 @@ async def compare_noah_grace():
     pool = await get_pool()
     async with pool.acquire() as conn:
         grid_points = await conn.fetch("""
-            SELECT DISTINCT g.lat, g.lon, g.geom
+            SELECT DISTINCT g.lat, g.lon
             FROM gldas_sms g
             WHERE EXISTS (
                 SELECT 1 FROM grace_tws t

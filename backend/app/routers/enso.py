@@ -204,7 +204,8 @@ async def get_impact(
                    u.gws_anomaly, u.ndvi, u.drought_index, u.risk_level
             FROM periods p
             LEFT JOIN unified_monitoring u
-                ON u.period_date = make_date(p.year, p.month, 1)
+                ON EXTRACT(YEAR FROM u.period_date) = p.year
+                AND EXTRACT(MONTH FROM u.period_date) = p.month
             WHERE p.phase != 'Neutral'
             ORDER BY p.year, p.month
             """,
