@@ -1,10 +1,10 @@
 import os
 import io
+import requests
 from datetime import datetime
 
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import Response
-from openai import OpenAI as KimiClient
 from reportlab.lib.pagesizes import A4
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib.colors import HexColor, white, black
@@ -22,9 +22,6 @@ router = APIRouter(tags=["report"])
 @router.get("/report/pdf")
 async def generate_pdf_report():
     """Generate laporan PDF monitoring air tanah NTB."""
-    kimi_key = os.getenv("KIMI_API_KEY")
-    if not kimi_key:
-        raise HTTPException(status_code=503, detail="KIMI_API_KEY not configured")
 
     pool = await get_pool()
     async with pool.acquire() as conn:
@@ -52,21 +49,38 @@ async def generate_pdf_report():
             FROM well_latest_status GROUP BY kabupaten ORDER BY kabupaten
         """)
 
-        # AI interpretation
-        kimi = KimiClient(api_key=kimi_key, base_url="https://api.moonshot.ai/v1")
-        ai_resp = kimi.chat.completions.create(
-            model="moonshot-v1-8k",
-            messages=[{"role":"user","content":
+        # AI interpretation (Gemini with fallback)
+        gemini_key = os.getenv("GEMINI_API_KEY", "")
+        ai_text = "AI interpretation unavailable."
+
+        if gemini_key:
+            gemini_models = ["gemini-2.0-flash", "gemini-flash-latest", "gemini-2.5-flash", "gemini-flash-lite-latest"]
+            gemini_prompt = (
                 f"Buat ringkasan eksekutif kondisi sumber daya air NTB dalam 2 paragraf singkat. "
                 f"Data: Anomali simpanan air tanah (GWS) regional terkini {float(gws_rows[0]['avg_gws'])} cm EWH, "
                 f"Anomali TWS (Total Water Storage) {float(gws_rows[0]['avg_tws'])} cm EWH. "
                 f"{sum(r['kritis'] or 0 for r in kab_rows)} sumur kritis. "
                 f"GWS dihitung dengan formula Rodell et al. (2009): GWS = TWS - Soil Moisture. "
                 f"Tegaskan bahwa GWS satelit adalah indikator regional, bukan pembacaan langsung muka air sumur. "
-                f"Bahasa formal untuk laporan pemerintah. Referensi PP 43/2008."}],
-            temperature=0.3
-        )
-        ai_text = ai_resp.choices[0].message.content
+                f"Bahasa formal untuk laporan pemerintah. Referensi PP 43/2008."
+            )
+
+            for model in gemini_models:
+                try:
+                    resp = requests.post(
+                        f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent",
+                        headers={"Content-Type": "application/json", "X-goog-api-key": gemini_key},
+                        json={
+                            "contents": [{"parts": [{"text": gemini_prompt}]}],
+                            "generationConfig": {"temperature": 0.3, "maxOutputTokens": 512}
+                        },
+                        timeout=30
+                    )
+                    if resp.status_code == 200:
+                        ai_text = resp.json()["candidates"][0]["content"]["parts"][0]["text"]
+                        break
+                except Exception:
+                    continue
 
         # Build PDF
         buf = io.BytesIO()

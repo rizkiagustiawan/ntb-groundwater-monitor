@@ -1,8 +1,8 @@
 import os
+import requests
 from datetime import datetime
 
 from fastapi import APIRouter, HTTPException
-from openai import OpenAI as KimiClient
 
 from app.db import get_pool
 from app.utils import classify_ndvi, format_period_label
@@ -10,16 +10,52 @@ from app.queries import get_latest_ndvi_rows
 
 router = APIRouter(tags=["ai"])
 
+GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "")
+GEMINI_MODELS = [
+    "gemini-2.0-flash",
+    "gemini-flash-latest",
+    "gemini-2.5-flash",
+    "gemini-flash-lite-latest",
+]
+
+
+def call_gemini(prompt: str) -> str:
+    """Call Gemini API with model fallback."""
+    headers = {
+        "Content-Type": "application/json",
+        "X-goog-api-key": GEMINI_API_KEY,
+    }
+    payload = {
+        "contents": [{"parts": [{"text": prompt}]}],
+        "generationConfig": {"temperature": 0.3, "maxOutputTokens": 1024}
+    }
+
+    last_error = None
+    for model in GEMINI_MODELS:
+        url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
+        try:
+            resp = requests.post(url, headers=headers, json=payload, timeout=30)
+            if resp.status_code == 200:
+                data = resp.json()
+                return data["candidates"][0]["content"]["parts"][0]["text"]
+            else:
+                last_error = f"{model}: {resp.status_code}"
+                continue
+        except Exception as e:
+            last_error = f"{model}: {str(e)}"
+            continue
+
+    raise Exception(f"All Gemini models failed. Last error: {last_error}")
+
 
 @router.get("/ai/interpret")
 async def ai_interpret_ntb():
     """
-    Interpretasi otomatis kondisi air tanah NTB menggunakan AI.
+    Interpretasi otomatis kondisi air tanah NTB menggunakan AI (Gemini).
     Menggabungkan data GWS (TWS - SMS) + Curah Hujan + NDVI + status sumur.
     """
-    kimi_key = os.getenv("KIMI_API_KEY")
-    if not kimi_key:
-        raise HTTPException(status_code=503, detail="KIMI_API_KEY not configured")
+    if not GEMINI_API_KEY:
+        raise HTTPException(status_code=503, detail="GEMINI_API_KEY not configured")
 
     pool = await get_pool()
     async with pool.acquire() as conn:
@@ -28,11 +64,10 @@ async def ai_interpret_ntb():
             SELECT t.period_date,
                    ROUND(AVG(t.tws_anomaly - COALESCE(s.sms_anomaly, 0))::numeric, 2) AS avg_gws
             FROM grace_tws t
-            LEFT JOIN gldas_sms s ON 
-                EXTRACT(YEAR FROM t.period_date) = s.year AND 
+            LEFT JOIN gldas_sms s ON
+                EXTRACT(YEAR FROM t.period_date) = s.year AND
                 EXTRACT(MONTH FROM t.period_date) = s.month AND
-                ABS(t.lat - s.lat) < 0.01 AND 
-                ABS(t.lon - s.lon) < 0.01
+                ABS(t.lat - s.lat) < 0.01 AND ABS(t.lon - s.lon) < 0.01
             GROUP BY t.period_date
             ORDER BY t.period_date DESC
             LIMIT 6
@@ -108,19 +143,10 @@ Berikan interpretasi komprehensif dalam Bahasa Indonesia (maksimal 200 kata) yan
 
 Referensikan PP No. 43 Tahun 2008."""
 
-        # Call Kimi API
-        kimi = KimiClient(
-            api_key=kimi_key,
-            base_url="https://api.moonshot.ai/v1"
-        )
-
-        response = kimi.chat.completions.create(
-            model="moonshot-v1-8k",
-            messages=[{"role": "user", "content": prompt}],
-            temperature=0.3
-        )
-
-        interpretation = response.choices[0].message.content
+        try:
+            interpretation = call_gemini(prompt)
+        except Exception as e:
+            raise HTTPException(status_code=502, detail=f"Gemini API error: {str(e)}")
 
         return {
             "generated_at": datetime.now().isoformat(),
@@ -132,7 +158,7 @@ Referensikan PP No. 43 Tahun 2008."""
                 "Data Sumur Pantau NTB"
             ],
             "legal_reference": "PP No. 43 Tahun 2008",
-            "ai_model": "moonshot-v1-8k",
+            "ai_model": "gemini-flash-latest",
             "interpretation": interpretation,
             "raw_data": {
                 "gws_6months": [

@@ -7,7 +7,7 @@ from app.db import get_pool
 
 router = APIRouter(prefix="/downscale", tags=["downscale"])
 
-MODEL_DIR = "data/models"
+MODEL_DIR = "/data/models"
 
 
 def load_model():
