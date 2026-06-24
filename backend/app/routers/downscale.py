@@ -11,22 +11,18 @@ MODEL_DIR = "data/models"
 
 
 def load_model():
-    """Load trained model if available."""
-    try:
-        import joblib
-        path = f"{MODEL_DIR}/grace_downscale.joblib"
-        if os.path.exists(path):
-            return joblib.load(path)
-    except (ImportError, Exception):
-        pass
-    try:
-        import pickle
-        path = f"{MODEL_DIR}/grace_downscale.pkl"
-        if os.path.exists(path):
-            with open(path, "rb") as f:
-                return pickle.load(f)
-    except (ImportError, Exception):
-        pass
+    """Load trained model (supports ensemble)."""
+    import pickle
+    for ext, loader in [("joblib", lambda p: __import__('joblib').load(p)),
+                         ("pkl", lambda p: pickle.load(open(p, 'rb')))]:
+        for model_type in ["ensemble", "xgboost", "rf", "lightgbm"]:
+            path = f"{MODEL_DIR}/grace_downscale_{model_type}.{ext}"
+            if os.path.exists(path):
+                try:
+                    data = loader(path)
+                    return {"type": model_type, "model": data}
+                except Exception:
+                    pass
     return None
 
 
@@ -36,9 +32,9 @@ async def predict_gws(
     months: int = Query(12, ge=1, le=60)
 ):
     """Predict well-level GWS using downscaled GRACE model."""
-    model = load_model()
-    if model is None:
-        return {"error": "Model not trained. Run: python3 scripts/grace_downscale.py"}
+    model_data = load_model()
+    if model_data is None:
+        return {"error": "Model not trained. Run: python3 scripts/grace_downscale.py --model ensemble"}
 
     pool = await get_pool()
     async with pool.acquire() as conn:
@@ -80,7 +76,17 @@ async def predict_gws(
 
             features = np.array([[tws, sms, precip, ndvi, month_sin, month_cos,
                                   float(well["lat"]), float(well["lon"])]])
-            pred = model.predict(features)[0]
+
+            if model_data["type"] == "ensemble":
+                models = model_data["model"]["models"]
+                weights = model_data["model"]["weights"]
+                preds = []
+                for mname, m in models.items():
+                    p = m.predict(features)[0]
+                    preds.append(p * weights.get(mname, 1 / len(models)))
+                pred = sum(preds)
+            else:
+                pred = model_data["model"].predict(features)[0]
 
             predictions.append({
                 "period": r["period_date"].strftime("%Y-%m"),
@@ -91,6 +97,7 @@ async def predict_gws(
 
         return {
             "well": {"id": well["id"], "code": well["well_code"], "name": well["name"]},
+            "model_type": model_data["type"],
             "predictions": list(reversed(predictions)),
         }
 
@@ -103,6 +110,16 @@ async def get_model_metrics():
         with open(metrics_path) as f:
             return json.load(f)
     return {"error": "Model not trained yet"}
+
+
+@router.get("/compare")
+async def compare_models():
+    """Compare all trained models."""
+    metrics_path = f"{MODEL_DIR}/metrics.json"
+    if os.path.exists(metrics_path):
+        with open(metrics_path) as f:
+            return json.load(f)
+    return {"error": "No models trained yet"}
 
 
 @router.get("/train")
