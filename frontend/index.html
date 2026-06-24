@@ -191,7 +191,7 @@ select:focus{border-color:var(--accent)}
     </div>
   </div>
   <div class="topbar-badges">
-    <span class="badge">280 ESDM WELLS</span>
+    <span class="badge">413 ESDM WELLS</span>
     <span class="badge">NASA GRACE (GWS)</span>
     <span class="badge">SENTINEL-2 (NDVI)</span>
     <span class="badge">BMKG RAIN</span>
@@ -226,9 +226,9 @@ select:focus{border-color:var(--accent)}
   <!-- SIDEBAR -->
   <div class="sidebar">
     <div class="sidebar-header">
-      <div class="sidebar-title">Ringkasan NTB (280 Titik ESDM)</div>
+      <div class="sidebar-title">Ringkasan NTB (413 Titik ESDM)</div>
       <div class="stat-grid">
-        <div class="stat"><div class="stat-val c-muted" id="s-total">280</div><div class="stat-lbl">Total Sumur</div></div>
+        <div class="stat"><div class="stat-val c-muted" id="s-total">413</div><div class="stat-lbl">Total Sumur</div></div>
         <div class="stat"><div class="stat-val c-green" id="s-normal">-</div><div class="stat-lbl">Normal</div></div>
         <div class="stat"><div class="stat-val c-amber" id="s-waspada">-</div><div class="stat-lbl">Waspada</div></div>
         <div class="stat"><div class="stat-val c-red" id="s-kritis">-</div><div class="stat-lbl">Kritis</div></div>
@@ -500,8 +500,8 @@ async function loadSAR(){
 function updateStats(features){
   const s={normal:0,waspada:0,kritis:0,sangat_kritis:0};
   features.forEach(f=>{const sl=f.properties.status_level;if(s[sl]!==undefined)s[sl]++;});
-  // Total is fixed to the ESDM inventory size (280) as requested
-  document.getElementById('s-total').textContent='280';
+  // Total is fixed to the ESDM inventory size (413) as requested
+  document.getElementById('s-total').textContent='413';
   document.getElementById('s-normal').textContent=s.normal;
   document.getElementById('s-waspada').textContent=s.waspada;
   document.getElementById('s-kritis').textContent=s.kritis+s.sangat_kritis;
