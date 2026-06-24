@@ -87,12 +87,36 @@ def load_ndvi_csv(csv_path):
     return df
 
 
+def calc_geo_features(lat, lon):
+    """Calculate geographic proxy features from coordinates."""
+    import math
+
+    # Distance to nearest coast (approximate using NTB coastline points)
+    coast_points = [
+        (-8.5, 116.0), (-8.7, 116.1), (-8.9, 116.3),  # Lombok south
+        (-8.3, 116.1), (-8.2, 116.3), (-8.1, 116.5),  # Lombok north
+        (-8.5, 117.0), (-8.7, 117.2), (-8.9, 117.5),  # Sumbawa south
+        (-8.3, 117.0), (-8.2, 117.3), (-8.1, 117.6),  # Sumbawa north
+        (-8.5, 118.5), (-8.3, 118.7), (-8.1, 118.9),  # Bima area
+    ]
+
+    min_dist = min(math.sqrt((lat - c[0]) ** 2 + (lon - c[1]) ** 2) for c in coast_points)
+    dist_coast_km = min_dist * 111  # rough conversion to km
+
+    # Elevation proxy (higher lat = generally higher elevation in NTB)
+    elev_proxy = abs(lat - (-8.6)) * 100 + abs(lon - 117.0) * 50
+
+    # Slope proxy (gradient from neighbors)
+    slope_proxy = abs(lat - (-8.5)) * 10  # rough slope indicator
+
+    return dist_coast_km, elev_proxy, slope_proxy
+
+
 def build_features(grace_df, gldas_df, chirps_df, ndvi_df):
-    """Build aligned feature matrix from all data sources."""
+    """Build enhanced feature matrix from all data sources."""
 
     features = []
     targets = []
-    skipped = 0
 
     for _, row in grace_df.iterrows():
         lat, lon, year, month = row["lat"], row["lon"], row["year"], row["month"]
@@ -127,15 +151,50 @@ def build_features(grace_df, gldas_df, chirps_df, ndvi_df):
         month_sin = np.sin(2 * np.pi * month / 12)
         month_cos = np.cos(2 * np.pi * month / 12)
 
-        features.append([sms, precip, ndvi_val, month_sin, month_cos, lat, lon])
+        # Geographic proxy features
+        dist_coast, elev_proxy, slope_proxy = calc_geo_features(lat, lon)
+
+        features.append([
+            sms, precip, ndvi_val,
+            month_sin, month_cos,
+            lat, lon,
+            dist_coast, elev_proxy, slope_proxy,
+        ])
         targets.append(tws)
 
     X = np.array(features)
     y = np.array(targets)
 
-    feature_names = ["sms", "precip", "ndvi", "month_sin", "month_cos", "lat", "lon"]
+    feature_names = [
+        "sms", "precip", "ndvi",
+        "month_sin", "month_cos",
+        "lat", "lon",
+        "dist_coast", "elev_proxy", "slope_proxy",
+    ]
     log.info(f"Feature matrix: {X.shape}, Target: {y.shape}")
     return X, y, feature_names
+
+
+def tune_hyperparameters(X_train, y_train):
+    """Tune Random Forest hyperparameters using grid search."""
+    from sklearn.model_selection import GridSearchCV
+    from sklearn.ensemble import RandomForestRegressor
+
+    param_grid = {
+        "n_estimators": [100, 200, 300],
+        "max_depth": [6, 8, 10, 12],
+        "min_samples_split": [2, 5, 10],
+        "min_samples_leaf": [1, 2, 4],
+    }
+
+    rf = RandomForestRegressor(random_state=42, n_jobs=-1)
+    grid_search = GridSearchCV(rf, param_grid, cv=3, scoring="r2", n_jobs=-1, verbose=1)
+    grid_search.fit(X_train, y_train)
+
+    log.info(f"Best params: {grid_search.best_params_}")
+    log.info(f"Best CV R²: {grid_search.best_score_:.4f}")
+
+    return grid_search.best_estimator_, grid_search.best_params_
 
 
 def train_models(X, y, feature_names):
@@ -176,25 +235,24 @@ def train_models(X, y, feature_names):
     except Exception as e:
         log.warning(f"XGBoost failed: {e}")
 
-    # 2. Random Forest
+    # 2. Random Forest (with hyperparameter tuning)
     try:
         from sklearn.ensemble import RandomForestRegressor
 
-        model = RandomForestRegressor(
-            n_estimators=200, max_depth=10, random_state=42, n_jobs=-1
-        )
-        model.fit(X_train, y_train)
-        y_pred = model.predict(X_test)
+        log.info("Tuning Random Forest hyperparameters...")
+        tuned_model, best_params = tune_hyperparameters(X_train, y_train)
+        y_pred = tuned_model.predict(X_test)
         metrics = {
             "r2": float(r2_score(y_test, y_pred)),
             "rmse": float(np.sqrt(mean_squared_error(y_test, y_pred))),
             "mae": float(mean_absolute_error(y_test, y_pred)),
+            "best_params": best_params,
             "feature_importance": dict(
-                zip(feature_names, [float(x) for x in model.feature_importances_])
+                zip(feature_names, [float(x) for x in tuned_model.feature_importances_])
             ),
         }
-        results["random_forest"] = {"model": model, "metrics": metrics}
-        log.info(f"Random Forest: R²={metrics['r2']:.4f}, RMSE={metrics['rmse']:.4f}")
+        results["random_forest"] = {"model": tuned_model, "metrics": metrics}
+        log.info(f"Random Forest (tuned): R²={metrics['r2']:.4f}, RMSE={metrics['rmse']:.4f}")
     except Exception as e:
         log.warning(f"Random Forest failed: {e}")
 
