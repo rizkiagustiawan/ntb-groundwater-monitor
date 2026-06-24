@@ -5,6 +5,7 @@ Ref: Siswanto et al. 2022, Narulita et al. 2021, Faisol et al. 2022.
 
 from fastapi import APIRouter, Query
 import numpy as np
+import pandas as pd
 
 from app.db import get_pool
 
@@ -321,3 +322,167 @@ async def get_forecast(
         "el_nino_warning": el_nino_warning,
         "period": f"{rows[0]['year']}-{rows[0]['month']:02d} to {rows[-1]['year']}-{rows[-1]['month']:02d}",
     }
+
+
+@router.get("/propagation")
+async def get_drought_propagation(
+    start_year: int = Query(2020, description="Start year"),
+    end_year: int = Query(2026, description="End year"),
+):
+    """
+    Analyze drought propagation: how meteorological drought (CHIRPS)
+    propagates to groundwater drought (GWS) with time lag.
+    Based on Bilal (2024) and Nigatu (2024).
+    """
+    pool = await get_pool()
+    async with pool.acquire() as conn:
+        rows = await conn.fetch(
+            """
+            SELECT
+                t.period_date,
+                ROUND(AVG(t.tws_anomaly - COALESCE(s.sms_anomaly, 0))::numeric, 2) AS gws_anomaly,
+                ROUND(AVG(c.precip_mm)::numeric, 2) AS precip_mm
+            FROM grace_tws t
+            LEFT JOIN gldas_sms s ON
+                EXTRACT(YEAR FROM t.period_date) = s.year AND
+                EXTRACT(MONTH FROM t.period_date) = s.month AND
+                ABS(t.lat - s.lat) < 0.01 AND ABS(t.lon - s.lon) < 0.01
+            LEFT JOIN chirps_precip c ON
+                EXTRACT(YEAR FROM t.period_date) = c.year AND
+                EXTRACT(MONTH FROM t.period_date) = c.month AND
+                ABS(t.lat - c.lat) < 0.1 AND ABS(t.lon - c.lon) < 0.1
+            WHERE EXTRACT(YEAR FROM t.period_date) BETWEEN $1 AND $2
+            GROUP BY t.period_date
+            ORDER BY t.period_date
+            """,
+            start_year,
+            end_year,
+        )
+
+        periods = [r["period_date"].strftime("%Y-%m") for r in rows]
+        gws = [
+            float(r["gws_anomaly"]) if r["gws_anomaly"] else 0 for r in rows
+        ]
+        precip = [float(r["precip_mm"]) if r["precip_mm"] else 0 for r in rows]
+
+        precip_arr = np.array(precip)
+        mean_p = np.mean(precip_arr)
+        std_p = np.std(precip_arr)
+        spi = [(p - mean_p) / std_p if std_p > 0 else 0 for p in precip]
+
+        gws_arr = np.array(gws)
+        spi_arr = np.array(spi)
+
+        lags = list(range(0, 13))
+        correlations = []
+        for lag in lags:
+            if lag == 0:
+                corr = np.corrcoef(spi_arr, gws_arr)[0, 1]
+            else:
+                corr = np.corrcoef(spi_arr[:-lag], gws_arr[lag:])[0, 1]
+            correlations.append(
+                round(float(corr), 3) if not np.isnan(corr) else 0
+            )
+
+        valid_corrs = [
+            (abs(c), i) for i, c in enumerate(correlations) if not np.isnan(c)
+        ]
+        optimal_lag = (
+            max(valid_corrs, key=lambda x: x[0])[1] if valid_corrs else 0
+        )
+        optimal_corr = (
+            correlations[optimal_lag] if optimal_lag < len(correlations) else 0
+        )
+
+        if abs(optimal_corr) >= 0.7:
+            strength = "strong"
+        elif abs(optimal_corr) >= 0.4:
+            strength = "moderate"
+        elif abs(optimal_corr) >= 0.2:
+            strength = "weak"
+        else:
+            strength = "none"
+
+        return {
+            "metadata": {
+                "method": "Cross-correlation SPI vs GWS",
+                "reference": "Bilal & Gupta (2024), Nigatu et al. (2024)",
+                "period": f"{start_year}-{end_year}",
+            },
+            "propagation": {
+                "optimal_lag_months": optimal_lag,
+                "correlation_at_lag": optimal_corr,
+                "strength": strength,
+                "interpretation": (
+                    f"{'Meteorological' if optimal_lag > 0 else 'No'} drought propagation detected. "
+                    f"SPI leads GWS by {optimal_lag} months (r={optimal_corr:.3f})."
+                ),
+            },
+            "lag_correlations": [
+                {"lag_months": lag, "correlation": corr}
+                for lag, corr in zip(lags, correlations)
+            ],
+            "data": [
+                {"period": p, "spi": round(s, 3), "gws_anomaly": g}
+                for p, s, g in zip(periods, spi, gws)
+            ],
+        }
+
+
+@router.get("/propagation/summary")
+async def get_propagation_summary():
+    """
+    Summary of drought propagation characteristics for NTB.
+    Based on Bilal (2024) drought fingerprint methodology.
+    """
+    pool = await get_pool()
+    async with pool.acquire() as conn:
+        results = {}
+        for timescale in [1, 3, 6, 12]:
+            rows = await conn.fetch(
+                """
+                SELECT t.period_date,
+                       ROUND(AVG(t.tws_anomaly - COALESCE(s.sms_anomaly, 0))::numeric, 2) AS gws,
+                       ROUND(AVG(c.precip_mm)::numeric, 2) AS precip
+                FROM grace_tws t
+                LEFT JOIN gldas_sms s ON
+                    EXTRACT(YEAR FROM t.period_date) = s.year AND
+                    EXTRACT(MONTH FROM t.period_date) = s.month AND
+                    ABS(t.lat - s.lat) < 0.01 AND ABS(t.lon - s.lon) < 0.01
+                LEFT JOIN chirps_precip c ON
+                    EXTRACT(YEAR FROM t.period_date) = c.year AND
+                    EXTRACT(MONTH FROM t.period_date) = c.month AND
+                    ABS(t.lat - c.lat) < 0.1 AND ABS(t.lon - c.lon) < 0.1
+                WHERE t.period_date >= '2020-01-01'
+                GROUP BY t.period_date
+                ORDER BY t.period_date
+                """
+            )
+
+            gws_vals = [float(r["gws"]) if r["gws"] else 0 for r in rows]
+            precip_vals = [float(r["precip"]) if r["precip"] else 0 for r in rows]
+
+            if len(precip_vals) >= timescale:
+                df = pd.DataFrame({"precip": precip_vals, "gws": gws_vals})
+                df["spi_proxy"] = (
+                    df["precip"] - df["precip"].rolling(timescale).mean()
+                ) / df["precip"].rolling(timescale).std()
+                df = df.dropna()
+
+                if len(df) > 10:
+                    corr = df["spi_proxy"].corr(df["gws"])
+                    results[f"SPI-{timescale}"] = round(float(corr), 3)
+                else:
+                    results[f"SPI-{timescale}"] = None
+            else:
+                results[f"SPI-{timescale}"] = None
+
+        return {
+            "metadata": {
+                "method": "SPI-GWS correlation at multiple timescales",
+                "reference": "Bilal & Gupta (2024), Nigatu et al. (2024)",
+                "note": "Higher SPI timescale = longer accumulation period",
+            },
+            "timescale_correlations": results,
+            "interpretation": "SPI at the timescale with highest correlation indicates the accumulation period most relevant to groundwater response.",
+        }
