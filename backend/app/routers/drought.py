@@ -324,6 +324,159 @@ async def get_forecast(
     }
 
 
+@router.get("/multi-index")
+async def get_multi_index_drought(
+    start_year: int = Query(2020),
+    end_year: int = Query(2026)
+):
+    """
+    Multi-index drought assessment combining SPI, GWS anomaly, and NDVI.
+    Based on Nawaz et al. (2026) and Talebi et al. (2024).
+    """
+    pool = await get_pool()
+    async with pool.acquire() as conn:
+        rows = await conn.fetch("""
+            SELECT
+                u.period_date,
+                ROUND(AVG(u.gws_anomaly)::numeric, 2) AS gws,
+                ROUND(AVG(u.ndvi)::numeric, 3) AS ndvi,
+                ROUND(AVG(u.chirps_precip_mm)::numeric, 2) AS precip,
+                u.risk_level
+            FROM unified_monitoring u
+            WHERE EXTRACT(YEAR FROM u.period_date) BETWEEN $1 AND $2
+            GROUP BY u.period_date, u.risk_level
+            ORDER BY u.period_date
+        """, start_year, end_year)
+
+        if not rows:
+            rows = await conn.fetch("""
+                SELECT
+                    t.period_date,
+                    ROUND(AVG(t.tws_anomaly - COALESCE(s.sms_anomaly, 0))::numeric, 2) AS gws,
+                    NULL AS ndvi,
+                    ROUND(AVG(c.precip_mm)::numeric, 2) AS precip
+                FROM grace_tws t
+                LEFT JOIN gldas_sms s ON
+                    EXTRACT(YEAR FROM t.period_date) = s.year AND
+                    EXTRACT(MONTH FROM t.period_date) = s.month AND
+                    ABS(t.lat - s.lat) < 0.01 AND ABS(t.lon - s.lon) < 0.01
+                LEFT JOIN chirps_precip c ON
+                    EXTRACT(YEAR FROM t.period_date) = c.year AND
+                    EXTRACT(MONTH FROM t.period_date) = c.month AND
+                    ABS(t.lat - c.lat) < 0.1 AND ABS(t.lon - c.lon) < 0.1
+                WHERE EXTRACT(YEAR FROM t.period_date) BETWEEN $1 AND $2
+                GROUP BY t.period_date
+                ORDER BY t.period_date
+            """, start_year, end_year)
+
+        periods = [r['period_date'].strftime('%Y-%m') for r in rows]
+        gws_vals = [float(r['gws']) if r['gws'] else 0 for r in rows]
+        ndvi_vals = [float(r['ndvi']) if r['ndvi'] else 0.5 for r in rows]
+        precip_vals = [float(r['precip']) if r['precip'] else 0 for r in rows]
+
+        precip_arr = np.array(precip_vals)
+        spi = list((precip_arr - np.mean(precip_arr)) / np.std(precip_arr)) if np.std(precip_arr) > 0 else [0]*len(precip_vals)
+
+        gws_arr = np.array(gws_vals)
+        gws_idx = list((gws_arr - np.mean(gws_arr)) / np.std(gws_arr)) if np.std(gws_arr) > 0 else [0]*len(gws_vals)
+
+        ndvi_arr = np.array(ndvi_vals)
+        ndvi_idx = list((ndvi_arr - np.mean(ndvi_arr)) / np.std(ndvi_arr)) if np.std(ndvi_arr) > 0 else [0]*len(ndvi_vals)
+
+        combined = []
+        for s, g, n in zip(spi, gws_idx, ndvi_idx):
+            c = 0.4 * s + 0.4 * g + 0.2 * n
+            combined.append(round(c, 3))
+
+        def classify(val):
+            if val >= 1.0:
+                return "very_wet"
+            if val >= 0.5:
+                return "wet"
+            if val >= -0.5:
+                return "normal"
+            if val >= -1.0:
+                return "mild_drought"
+            if val >= -1.5:
+                return "moderate_drought"
+            if val >= -2.0:
+                return "severe_drought"
+            return "extreme_drought"
+
+        return {
+            "metadata": {
+                "method": "Combined SPI + GWS Index + NDVI Index",
+                "weights": {"spi": 0.4, "gws": 0.4, "ndvi": 0.2},
+                "reference": "Nawaz et al. (2026), Talebi et al. (2024)"
+            },
+            "data": [
+                {
+                    "period": p,
+                    "spi": round(s, 3),
+                    "gws_index": round(g, 3),
+                    "ndvi_index": round(n, 3),
+                    "combined_index": c,
+                    "status": classify(c)
+                }
+                for p, s, g, n, c in zip(periods, spi, gws_idx, ndvi_idx, combined)
+            ]
+        }
+
+
+@router.get("/spei")
+async def get_spei(
+    start_year: int = Query(2020),
+    end_year: int = Query(2026)
+):
+    """
+    SPEI-like index using CHIRPS precipitation and BMKG temperature.
+    Simplified: SPEI ≈ SPI adjusted by temperature anomaly.
+    """
+    pool = await get_pool()
+    async with pool.acquire() as conn:
+        rows = await conn.fetch("""
+            SELECT
+                c.year, c.month,
+                ROUND(AVG(c.precip_mm)::numeric, 2) AS precip,
+                ROUND(AVG(b.temp_c)::numeric, 1) AS temp
+            FROM chirps_precip c
+            LEFT JOIN bmkg_rainfall b ON
+                c.year = EXTRACT(YEAR FROM b.date)::int AND
+                c.month = EXTRACT(MONTH FROM b.date)::int AND
+                ABS(c.lat - b.lat) < 0.1 AND ABS(c.lon - b.lon) < 0.1
+            WHERE c.year BETWEEN $1 AND $2
+            GROUP BY c.year, c.month
+            ORDER BY c.year, c.month
+        """, start_year, end_year)
+
+        if not rows:
+            return {"error": "No data available"}
+
+        precip = [float(r['precip']) if r['precip'] else 0 for r in rows]
+        temp = [float(r['temp']) if r['temp'] else 25 for r in rows]
+        periods = [f"{r['year']}-{r['month']:02d}" for r in rows]
+
+        precip_arr = np.array(precip)
+        spi = list((precip_arr - np.mean(precip_arr)) / np.std(precip_arr)) if np.std(precip_arr) > 0 else [0]*len(precip)
+
+        temp_arr = np.array(temp)
+        temp_anomaly = list((temp_arr - np.mean(temp_arr)) / np.std(temp_arr)) if np.std(temp_arr) > 0 else [0]*len(temp)
+
+        spei = [round(s - 0.3 * t, 3) for s, t in zip(spi, temp_anomaly)]
+
+        return {
+            "metadata": {
+                "method": "Simplified SPEI = SPI - 0.3 * temp_anomaly",
+                "note": "Full SPEI requires potential evapotranspiration (PET) calculation. This is a simplified proxy.",
+                "reference": "Talebi et al. (2024)"
+            },
+            "data": [
+                {"period": p, "spi": round(s, 3), "spei": spe, "temp_anomaly": round(t, 3)}
+                for p, s, spe, t in zip(periods, spi, spei, temp_anomaly)
+            ]
+        }
+
+
 @router.get("/propagation")
 async def get_drought_propagation(
     start_year: int = Query(2020, description="Start year"),
